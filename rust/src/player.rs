@@ -1,4 +1,7 @@
+use game_core::client::run_client;
+use game_core::server::run_server;
 use godot::classes::Sprite2D;
+use godot::classes::class_macros::sys::godot_virtual_consts::EditorExportPlatformExtension::run;
 use godot::prelude::*;
 
 #[derive(GodotClass)]
@@ -12,6 +15,8 @@ struct Player {
 
 use godot::classes::ISprite2D;
 
+use crate::async_runtime::AsyncRuntime;
+
 #[godot_api]
 impl ISprite2D for Player {
     fn init(base: Base<Sprite2D>) -> Self {
@@ -21,6 +26,21 @@ impl ISprite2D for Player {
             speed: 400.0,
             angular_speed: std::f64::consts::PI,
             base,
+        }
+    }
+
+    fn ready(&mut self) {
+        // we are going to shove this in here for now for testing purposes
+        if let Ok(channel_map) = AsyncRuntime::block_on(run_server()) {
+            godot_print!("server running");
+        } else {
+            godot_print!("failed to run server");
+        }
+
+        if let Ok((server_receiver, client_sender)) = AsyncRuntime::block_on(run_client()) {
+            godot_print!("client running");
+        } else {
+            godot_print!("failed to run client");
         }
     }
 

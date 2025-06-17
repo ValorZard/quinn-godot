@@ -6,6 +6,7 @@ license = "MIT"
 
 [dependencies]
 godot.workspace = true
-
+tokio.workspace = true
+game_core = { path = "../game_core" }
 [lib]
 crate-type = ["cdylib"] # Compile this crate to a dynamic C library.

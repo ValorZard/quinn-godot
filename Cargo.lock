@@ -878,7 +878,9 @@ dependencies = [
 name = "rust"
 version = "1.0.0"
 dependencies = [
+ "game_core",
  "godot",
+ "tokio",
 ]
 
 [[package]]

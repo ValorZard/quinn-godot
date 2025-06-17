@@ -1,6 +1,7 @@
 use rkyv::{Archive, Deserialize, Serialize};
 
-mod server;
+pub mod client;
+pub mod server;
 
 pub type PlayerId = u64;
 

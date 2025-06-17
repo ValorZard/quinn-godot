@@ -6,7 +6,7 @@ use std::{
     collections::HashMap,
     error::Error,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use crate::{
@@ -21,7 +21,6 @@ use quinn::{
 use quinn_proto::crypto::rustls::QuicClientConfig;
 use rkyv::{Archived, de, rancor, ser};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-use tokio::{sync::Mutex, task::JoinSet};
 
 pub fn make_server_endpoint(
     bind_addr: SocketAddr,
@@ -46,130 +45,14 @@ fn configure_server()
     Ok((server_config, cert_der))
 }
 
-async fn run_server() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+pub async fn run_server()
+-> Result<Arc<Mutex<HashMap<PlayerId, MessageChannels>>>, Box<dyn Error + Send + Sync + 'static>> {
     //console_subscriber::init();
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
     let channel_map = Arc::new(Mutex::new(HashMap::<PlayerId, MessageChannels>::new()));
     tokio::spawn(run_quinn_server(addr, channel_map.clone()));
 
-    let mut world = World::new();
-
-    loop {
-        //  Process incoming messages from clients
-        let mut map = channel_map.lock().await;
-
-        // in case we have to remove players, we need to collect them first
-        let mut players_to_remove = Vec::<PlayerId>::new();
-
-        for (player_id, message_channels) in map.iter() {
-            let client_receiver = &message_channels.receiver;
-            while let Ok(message) = client_receiver.try_recv() {
-                /*
-                println!(
-                    "[server] received message from player {}: {:?}",
-                    player_id, message
-                );
-                */
-                // Process the message
-                match message {
-                    ClientMessage::PlayerPosition(player_position) => {
-                        // Update player position in the world
-                        let query = world.query_mut::<(&PlayerId, &mut PlayerPosition)>();
-                        for (_, (id, position)) in query {
-                            if *id == *player_id {
-                                *position = player_position;
-                                /*
-                                println!(
-                                    "Updated position for player {}: ({}, {})",
-                                    player_id, position.x, position.y
-                                );
-                                */
-                            }
-                        }
-                    }
-                    ClientMessage::PlayerJoined { player_id } => {
-                        // Handle player joining logic
-                        println!("Player {} has joined", player_id);
-                        world.spawn((player_id, PlayerPosition { x: 0.0, y: 0.0 }));
-                        let query = world.query_mut::<&PlayerId>();
-                        let remote_player_ids: Vec<PlayerId> =
-                            query.into_iter().map(|(_, id)| *id).collect();
-                        let new_player_message = ServerMessage::PlayerJoined { remote_player_ids };
-                        for (_, message_channels) in map.iter() {
-                            let server_sender = &message_channels.sender;
-                            // Send a message to all players about the new player
-                            if let Err(e) = server_sender.send(new_player_message.clone()).await {
-                                println!(
-                                    "Failed to send player joined message to player {}: {}",
-                                    player_id, e
-                                );
-                            }
-                        }
-                    }
-                    ClientMessage::Quit { player_id } => {
-                        // Handle player quit logic
-                        println!("Player {} has quit", player_id);
-                        players_to_remove.push(player_id);
-                        // Remove player from the world
-                        let query = world.query_mut::<&PlayerId>();
-                        let mut entities_to_despawn = Vec::new();
-                        for (entity, id) in query {
-                            if *id == player_id {
-                                entities_to_despawn.push(entity);
-                            }
-                        }
-                        for entity in entities_to_despawn {
-                            world.despawn(entity).unwrap();
-                            // Send a message to all players about the player quitting
-                            let player_left_message = ServerMessage::PlayerLeft { player_id };
-                            for (_, message_channels) in map.iter() {
-                                let server_sender = &message_channels.sender;
-                                if let Err(e) =
-                                    server_sender.send(player_left_message.clone()).await
-                                {
-                                    println!(
-                                        "Failed to send player left message to player {}: {}",
-                                        player_id, e
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        for player_id in &players_to_remove {
-            // Remove the player from the channel map
-            map.remove(player_id);
-            println!("Removed player {} from channel map", player_id);
-        }
-
-        // Clear the list of players to remove for the next iteration
-        players_to_remove.clear();
-
-        // Send messages to clients
-        let game_data = world
-            .query::<(&PlayerId, &PlayerPosition)>()
-            .iter()
-            .map(|(entity, (id, position))| ServerMessage::PlayerPosition(*id, *position))
-            .collect::<Vec<ServerMessage>>();
-
-        for (player_id, message_channels) in map.iter() {
-            // Get player position in the world
-            let server_sender = &message_channels.sender;
-            for message in &game_data {
-                // Send player position to the client
-                if let Err(e) = server_sender.send(message.clone()).await {
-                    println!("Failed to send message to player {}: {}", player_id, e);
-                }
-            }
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_millis(15)).await;
-    }
-
-    Ok(())
+    Ok(channel_map)
 }
 
 #[derive(Debug)]
@@ -179,7 +62,7 @@ pub struct MessageChannels {
 }
 
 /// Runs a QUIC server bound to given address.
-async fn run_quinn_server(
+pub async fn run_quinn_server(
     addr: SocketAddr,
     channel_map: Arc<Mutex<HashMap<PlayerId, MessageChannels>>>,
 ) {
@@ -202,7 +85,7 @@ async fn run_quinn_server(
         let (client_sender, client_receiver) = async_channel::unbounded::<ClientMessage>();
         // Store the channels in the map
         {
-            let mut map = channel_map.lock().await;
+            let mut map = channel_map.lock().unwrap();
             map.insert(
                 player_id,
                 MessageChannels {
