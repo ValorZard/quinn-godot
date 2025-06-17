@@ -1,7 +1,16 @@
 [workspace]
 resolver = "3"
-members = ["rust"]
+members = ["game_core", "rust"]
 
 
 [workspace.dependencies]
 godot = {version = "0.3.1", features = ["api-4-4"]}
+bytes = "1.10.1"
+quinn = "0.11.8"
+quinn-proto = "0.11.12"
+rcgen = "0.13.2"
+tokio = { version = "1.45.1", features = ["full"] }
+async-channel = "2.3.1"
+rkyv = "0.8.10"
+hecs = "0.10.5"
+console-subscriber = "0.4.1"
