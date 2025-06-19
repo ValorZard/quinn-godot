@@ -1,13 +1,15 @@
 use game_core::{client::run_client, ClientMessage, PlayerPosition, ServerMessage};
 use godot::{classes::{Button, IButton}, prelude::*};
 
-use crate::async_runtime::AsyncRuntime;
+use crate::{async_runtime::AsyncRuntime, player::{self, Player}};
 
 #[derive(GodotClass)]
 #[class(base=Button)]
 struct ClientButton {
     server_receiver: Option<async_channel::Receiver<ServerMessage>>,
     client_sender: Option<async_channel::Sender<ClientMessage>>,
+    #[export]
+    player_ref: Option<Gd<Player>>,
     base: Base<Button>,
 }
 
@@ -17,6 +19,7 @@ impl IButton for ClientButton {
         Self {
             server_receiver: None, // Initialize with None, will be set when the client starts
             client_sender: None, // Initialize with None, will be set when the client starts
+            player_ref: None, // Reference to the player, if needed
             base,
         }
     }
@@ -59,9 +62,16 @@ impl IButton for ClientButton {
         if let Some(sender) = &self.client_sender {
             // Here you can send messages to the server if needed
             // For example, you might want to send a heartbeat or a status update
-            let message = ClientMessage::PlayerPosition(PlayerPosition{x : 0., y: 0.}); // Example message
-            if let Err(e) = sender.try_send(message) {
-                godot_print!("Failed to send message to server: {:?}", e);
+            if let Some(player_ref) = &self.player_ref {
+                let player = player_ref.bind();
+                let position = player.base().get_position();
+                let message = ClientMessage::PlayerPosition(PlayerPosition {
+                    x: position.x,
+                    y: position.y,
+                });
+                if let Err(e) = sender.try_send(message) {
+                    godot_print!("Failed to send player position: {:?}", e);
+                }
             }
         }
     }

@@ -8,7 +8,8 @@
 position = Vector2(903, 491)
 texture = ExtResource("1_ig7tw")
 
-[node name="ClientButton" type="ClientButton" parent="."]
+[node name="ClientButton" type="ClientButton" parent="." node_paths=PackedStringArray("player_ref")]
+player_ref = NodePath("../Player")
 offset_left = 108.0
 offset_top = 430.0
 offset_right = 391.0

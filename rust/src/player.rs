@@ -5,7 +5,7 @@ use godot::prelude::*;
 
 #[derive(GodotClass)]
 #[class(base=Sprite2D)]
-struct Player {
+pub struct Player {
     speed: f64,
     angular_speed: f64,
 
