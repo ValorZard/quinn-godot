@@ -186,3 +186,11 @@ impl IButton for ClientButton {
         self.remote_player_amount = self.remote_player_map.len() as i32;
     }
 }
+
+#[godot_api]
+impl ClientButton {
+    #[func]
+    fn get_local_player_id(&self) -> GString {
+        self.local_player_id.to_string().into()
+    }
+}

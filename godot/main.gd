@@ -8,7 +8,7 @@ func _ready() -> void:
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
-	$ClientButton/Label.text = "Amount: " + str($ClientButton.remote_player_amount)
+	$ClientButton/Label.text = "Amount: " + str($ClientButton.remote_player_amount) + " Local Player Id: " + $ClientButton.get_local_player_id()
 
 
 

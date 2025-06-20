@@ -91,6 +91,11 @@ impl Player {
         self.base_mut().emit_signal("speed_increased", &[]);
     }
 
+    #[func]
+    fn get_player_id(&self) -> GString {
+        self.player_id.to_string().into()
+    }
+
     #[signal]
     fn speed_increased();
 }
