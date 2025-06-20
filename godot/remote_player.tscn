@@ -1,6 +1,14 @@
-[gd_scene load_steps=2 format=3 uid="uid://rf26uexeggc1"]
+[gd_scene load_steps=3 format=3 uid="uid://rf26uexeggc1"]
 
 [ext_resource type="Texture2D" uid="uid://dcvpakna8i04d" path="res://godot-rust.png" id="1_my1ri"]
+[ext_resource type="Script" uid="uid://h5omgdasm6bu" path="res://remote_player.gd" id="2_vxd6c"]
 
 [node name="RemotePlayer" type="Player"]
 texture = ExtResource("1_my1ri")
+script = ExtResource("2_vxd6c")
+
+[node name="Label" type="Label" parent="."]
+offset_left = -92.0
+offset_top = -146.0
+offset_right = 83.0
+offset_bottom = -123.0

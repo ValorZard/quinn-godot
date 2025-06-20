@@ -129,16 +129,17 @@ impl IButton for ServerButton {
                 for game_data_message in &game_data {
                     // Send player position to the client
                     if let Err(e) = server_sender.try_send(game_data_message.clone()) {
-                        println!("Failed to send message to player {}: {}", player_id, e);
+                        godot_print!("Failed to send message to player {}: {}", player_id, e);
                     }
                 }
                 // Send new player messages
                 if !new_player_vec.is_empty() {
+                    // send new player message to all players
                     let new_player_message = ServerMessage::PlayerJoined {
                         player_ids: new_player_vec.clone(),
                     };
                     if let Err(e) = server_sender.try_send(new_player_message) {
-                        println!(
+                        godot_print!(
                             "Failed to send new player message to player {}: {}",
                             player_id, e
                         );
@@ -150,7 +151,7 @@ impl IButton for ServerButton {
                         player_ids: new_player_vec.clone(),
                     };
                     if let Err(e) = server_sender.try_send(leaving_player_message) {
-                        println!(
+                        godot_print!(
                             "Failed to send new player message to player {}: {}",
                             player_id, e
                         );

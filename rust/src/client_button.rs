@@ -75,6 +75,7 @@ impl IButton for ClientButton {
                             player_ref.set_player_id(self.local_player_id.clone());
                             player_ref.set_is_local(true);
                         }
+                        // TODO: figure out why this never gets called
                         godot_print!("[client] local ID: {}", self.local_player_id);
                     }
                     ServerMessage::PlayerPosition(remote_player_id, player_data) => {
