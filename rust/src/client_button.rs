@@ -71,6 +71,7 @@ impl IButton for ClientButton {
         // For example, you might want to check for incoming messages from the server
         if let Some(receiver) = &self.server_receiver {
             while let Ok(message) = receiver.try_recv() {
+                //godot_print!("Received message from server: {:?}", message);
                 match message {
                     ServerMessage::Hello { player_id } => {
                         self.local_player_id = player_id;

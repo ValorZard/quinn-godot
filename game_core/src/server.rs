@@ -110,7 +110,15 @@ pub async fn run_quinn_server(
             let hello_message = ServerMessage::Hello {
                 player_id: player_id.clone(),
             };
+            // serialize the message
             let serialized_message = rkyv::to_bytes::<rancor::Error>(&hello_message).unwrap();
+            // create the header with delimiter and size
+            let size: MessageSize = (serialized_message.len() as u32).to_be_bytes();
+            // attach the start delimiter to the header (this lets the client know that a new message is coming)
+            let header = [&DELIMITER[..], &size[..]].concat();
+            // prepend the header to the serialized message
+            let serialized_message = [&header, serialized_message.as_slice()].concat();
+            // then send the serialized message
             send_stream
                 .write_all(&serialized_message)
                 .await
