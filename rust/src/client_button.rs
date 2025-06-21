@@ -1,6 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
-use game_core::{client::run_client, ClientMessage, PlayerId, PlayerPosition, ServerMessage, DEFAULT_PLAYER_ID};
+use game_core::{
+    ClientMessage, DEFAULT_PLAYER_ID, PlayerId, PlayerPosition, ServerMessage, client::run_client,
+};
 use godot::{
     classes::{Button, IButton, Sprite2D},
     prelude::*,
@@ -38,7 +40,7 @@ impl IButton for ClientButton {
             player_ref: None,      // Reference to the player, if needed
             remote_player_ref: None, // Reference to the remote player, if needed
             world: World::new(),   // Initialize a new Hecs World
-            local_player_id: DEFAULT_PLAYER_ID,    // Local player ID, initialized to nothing
+            local_player_id: DEFAULT_PLAYER_ID, // Local player ID, initialized to nothing
             remote_player_map: HashMap::new(), // Map to keep track of remote players
             remote_player_amount: 0, // Initialize remote player amount to 0
             base,
@@ -68,8 +70,10 @@ impl IButton for ClientButton {
                 match message {
                     ServerMessage::Hello { player_id } => {
                         self.local_player_id = player_id;
-                        self.world
-                            .spawn((self.local_player_id.clone(), PlayerPosition { x: 0.0, y: 0.0 }));
+                        self.world.spawn((
+                            self.local_player_id.clone(),
+                            PlayerPosition { x: 0.0, y: 0.0 },
+                        ));
                         if let Some(player_ref) = self.player_ref.as_mut() {
                             let mut player_ref = player_ref.bind_mut();
                             player_ref.set_player_id(self.local_player_id.clone());
@@ -111,8 +115,10 @@ impl IButton for ClientButton {
                                 continue; // Skip if it's the local player or if its already in the map
                             }
                             godot_print!("[client] Player joined with ID: {}", remote_player_id);
-                            self.world
-                                .spawn((remote_player_id.clone(), PlayerPosition { x: 0.0, y: 0.0 }));
+                            self.world.spawn((
+                                remote_player_id.clone(),
+                                PlayerPosition { x: 0.0, y: 0.0 },
+                            ));
                             if let Some(remote_player_ref) = &self.remote_player_ref {
                                 let remote_player_scene = remote_player_ref.clone();
                                 let mut remote_player =

@@ -119,7 +119,9 @@ impl IButton for ServerButton {
                 .world
                 .query::<(&PlayerId, &PlayerPosition)>()
                 .iter()
-                .map(|(entity, (id, position))| ServerMessage::PlayerPosition(id.clone(), *position))
+                .map(|(entity, (id, position))| {
+                    ServerMessage::PlayerPosition(id.clone(), *position)
+                })
                 .collect::<Vec<ServerMessage>>();
 
             for (player_id, message_channels) in channel_map.iter() {
@@ -141,7 +143,8 @@ impl IButton for ServerButton {
                     if let Err(e) = server_sender.try_send(new_player_message) {
                         godot_print!(
                             "Failed to send new player message to player {}: {}",
-                            player_id, e
+                            player_id,
+                            e
                         );
                     }
                 }
@@ -153,7 +156,8 @@ impl IButton for ServerButton {
                     if let Err(e) = server_sender.try_send(leaving_player_message) {
                         godot_print!(
                             "Failed to send new player message to player {}: {}",
-                            player_id, e
+                            player_id,
+                            e
                         );
                     }
                 }

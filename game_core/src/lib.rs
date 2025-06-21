@@ -16,7 +16,7 @@ pub const DEFAULT_PLAYER_ID: PlayerId = String::new();
     derive(Debug),
 )]
 pub enum ServerMessage {
-    Hello { player_id:  PlayerId },
+    Hello { player_id: PlayerId },
     PlayerPosition(PlayerId, PlayerPosition),
     PlayerJoined { player_ids: Vec<PlayerId> },
     PlayerLeft { player_ids: Vec<PlayerId> },
