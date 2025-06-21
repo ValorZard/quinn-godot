@@ -1,5 +1,5 @@
 use core::net;
-use std::{error::Error, sync::Arc};
+use std::{error::Error, f32::consts::E, sync::Arc};
 
 use bytes::Bytes;
 use hecs::World;
@@ -98,6 +98,24 @@ impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
     }
 }
 
+pub fn serialize_client_message(
+    message: &ClientMessage,
+) -> Result<Vec<u8>, Box<dyn Error + Send + Sync + 'static>> {
+    let serialized_message = rkyv::to_bytes::<rancor::Error>(message);
+    match serialized_message {
+        Ok(bytes) => {
+            // create the header with delimiter and size
+            let size: MessageSize = (bytes.len() as u32).to_be_bytes();
+            // attach the start delimiter to the header (this lets the server know that a new message is coming)
+            let header = [&crate::DELIMITER[..], &size[..]].concat();
+            // prepend the header to the serialized message
+            let serialized_message = [&header, bytes.as_slice()].concat();
+            return Ok(serialized_message);
+        }
+        Err(e) => return Err(Box::new(e)),
+    }
+}
+
 async fn connect_channel_to_server(
     connection: Connection,
 ) -> Result<
@@ -172,29 +190,15 @@ async fn connect_channel_to_server(
         loop {
             // get message from sync client code
             while let Ok(message) = client_receiver.recv().await {
-                /*
-                println!(
-                    "[client] sending message: {:?} id {}",
-                    message,
-                    send_stream.id()
-                );
-                */
-                let serialized_message = rkyv::to_bytes::<rancor::Error>(&message).unwrap();
-                // create the header with delimiter and size
-                let size: MessageSize = (serialized_message.len() as u32).to_be_bytes();
-                // attach the start delimiter to the header (this lets the server know that a new message is coming)
-                let header = [&crate::DELIMITER[..], &size[..]].concat();
-                // prepend the header to the serialized message
-                let serialized_message = [&header, serialized_message.as_slice()].concat();
+                let serialized_message = match serialize_client_message(&message) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        println!("[client] failed to serialize message: {}", e);
+                        continue;
+                    }
+                };
                 // then send the serialized message
                 if let Ok(()) = send_stream.write_all(&serialized_message).await {
-                    /*
-                    println!(
-                        "[client] sent message: {:?}, stream id: {}",
-                        serialized_message,
-                        send_stream.id()
-                    );
-                    */
                 } else {
                     println!("[client] failed to send message: {:?}", message);
                 }

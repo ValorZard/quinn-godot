@@ -65,6 +65,24 @@ pub struct MessageChannels {
     pub sender: async_channel::Sender<ServerMessage>,
 }
 
+pub fn serialize_server_message(
+    message: &ServerMessage,
+) -> Result<Vec<u8>, Box<dyn Error + Send + Sync + 'static>> {
+    let serialized_message = rkyv::to_bytes::<rancor::Error>(message);
+    match serialized_message {
+        Ok(bytes) => {
+            // create the header with delimiter and size
+            let size: MessageSize = (bytes.len() as u32).to_be_bytes();
+            // attach the start delimiter to the header (this lets the server know that a new message is coming)
+            let header = [&crate::DELIMITER[..], &size[..]].concat();
+            // prepend the header to the serialized message
+            let serialized_message = [&header, bytes.as_slice()].concat();
+            return Ok(serialized_message);
+        }
+        Err(e) => return Err(Box::new(e)),
+    }
+}
+
 /// Runs a QUIC server bound to given address.
 pub async fn run_quinn_server(
     addr: SocketAddr,
@@ -110,14 +128,8 @@ pub async fn run_quinn_server(
             let hello_message = ServerMessage::Hello {
                 player_id: player_id.clone(),
             };
-            // serialize the message
-            let serialized_message = rkyv::to_bytes::<rancor::Error>(&hello_message).unwrap();
-            // create the header with delimiter and size
-            let size: MessageSize = (serialized_message.len() as u32).to_be_bytes();
-            // attach the start delimiter to the header (this lets the client know that a new message is coming)
-            let header = [&DELIMITER[..], &size[..]].concat();
-            // prepend the header to the serialized message
-            let serialized_message = [&header, serialized_message.as_slice()].concat();
+            let serialized_message = serialize_server_message(&hello_message)
+                .expect("Failed to serialize hello message");
             // then send the serialized message
             send_stream
                 .write_all(&serialized_message)
@@ -140,13 +152,8 @@ pub async fn run_quinn_server(
                     // get message from sync server code
                     while let Ok(message) = server_receiver.recv().await {
                         // serialize the message
-                        let serialized_message = rkyv::to_bytes::<rancor::Error>(&message).unwrap();
-                        // create the header with delimiter and size
-                        let size: MessageSize = (serialized_message.len() as u32).to_be_bytes();
-                        // attach the start delimiter to the header (this lets the client know that a new message is coming)
-                        let header = [&DELIMITER[..], &size[..]].concat();
-                        // prepend the header to the serialized message
-                        let serialized_message = [&header, serialized_message.as_slice()].concat();
+                        let serialized_message = serialize_server_message(&message)
+                            .expect("Failed to serialize message");
                         // then send the serialized message
                         if let Err(e) = send_stream.write_all(&serialized_message).await {
                             println!("[server] failed to send message: {:?}, {e}", message);
