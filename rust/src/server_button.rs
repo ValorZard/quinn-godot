@@ -4,6 +4,7 @@ use godot::{
     prelude::*,
 };
 use hecs::World;
+use tokio::task::JoinSet;
 
 use crate::async_runtime::AsyncRuntime;
 
@@ -11,6 +12,7 @@ use crate::async_runtime::AsyncRuntime;
 #[class(base=Button)]
 struct ServerButton {
     channel_map: Option<game_core::server::ChannelMap>,
+    join_set: JoinSet<JoinSet<()>>,
     world: World,
     base: Base<Button>,
 }
@@ -21,6 +23,7 @@ impl IButton for ServerButton {
         Self {
             channel_map: None,   // Initialize with None, will be set when the server starts
             world: World::new(), // Initialize a new Hecs World
+            join_set: JoinSet::new(), // Initialize an empty JoinSet
             base,
         }
     }
@@ -32,9 +35,10 @@ impl IButton for ServerButton {
     fn pressed(&mut self) {
         godot_print!("Server button pressed!");
         // we are going to shove this in here for now for testing purposes
-        if let Ok(channel_map) = AsyncRuntime::block_on(run_server()) {
+        if let Ok((channel_map, join_set)) = AsyncRuntime::block_on(run_server()) {
             godot_print!("server running");
             self.channel_map = Some(channel_map);
+            self.join_set = join_set;
         } else {
             godot_print!("failed to run server");
         }

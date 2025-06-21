@@ -104,6 +104,7 @@ async fn connect_channel_to_server(
     (
         async_channel::Receiver<ServerMessage>,
         async_channel::Sender<ClientMessage>,
+        tokio::task::JoinSet<()>,
     ),
     Box<dyn Error + Send + Sync + 'static>,
 > {
@@ -117,7 +118,9 @@ async fn connect_channel_to_server(
     let (server_sender, server_receiver) = async_channel::unbounded::<ServerMessage>();
     // Create a channel for receiving messages from the tokio task to sync code
     let (client_sender, client_receiver) = async_channel::unbounded::<ClientMessage>();
-    tokio::spawn(async move {
+    // return handle to to the connection tasks so we can drop it later
+    let mut join_set = tokio::task::JoinSet::new();
+    join_set.spawn(async move {
         println!("[client] start receiving messages from server");
         loop {
             // get message from server
@@ -161,7 +164,7 @@ async fn connect_channel_to_server(
         }
     });
 
-    tokio::spawn(async move {
+    join_set.spawn(async move {
         println!(
             "[client] start sending messages to server, stream id: {}",
             send_stream.id()
@@ -199,18 +202,19 @@ async fn connect_channel_to_server(
         }
     });
 
-    Ok((server_receiver, client_sender))
+    Ok((server_receiver, client_sender, join_set))
 }
 
 pub async fn run_client() -> Result<
     (
         async_channel::Receiver<ServerMessage>,
         async_channel::Sender<ClientMessage>,
+        tokio::task::JoinSet<()>,
     ),
     Box<dyn Error + Send + Sync + 'static>,
 > {
     let server_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
     let (endpoint, connection) = connect_to_server(server_address).await?;
-    let (server_receiver, client_sender) = connect_channel_to_server(connection).await?;
-    Ok((server_receiver, client_sender))
+    let (server_receiver, client_sender, join_set) = connect_channel_to_server(connection).await?;
+    Ok((server_receiver, client_sender, join_set))
 }

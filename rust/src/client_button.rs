@@ -19,6 +19,7 @@ use crate::{
 struct ClientButton {
     server_receiver: Option<async_channel::Receiver<ServerMessage>>,
     client_sender: Option<async_channel::Sender<ClientMessage>>,
+    join_set: tokio::task::JoinSet<()>,
     world: World,
     local_player_id: PlayerId,
     #[export]
@@ -37,6 +38,7 @@ impl IButton for ClientButton {
         Self {
             server_receiver: None, // Initialize with None, will be set when the client starts
             client_sender: None,   // Initialize with None, will be set when the client starts
+            join_set: tokio::task::JoinSet::new(), // Initialize an empty JoinSet
             player_ref: None,      // Reference to the player, if needed
             remote_player_ref: None, // Reference to the remote player, if needed
             world: World::new(),   // Initialize a new Hecs World
@@ -53,10 +55,12 @@ impl IButton for ClientButton {
 
     fn pressed(&mut self) {
         godot_print!("Client button pressed!");
-        if let Ok((server_receiver, client_sender)) = AsyncRuntime::block_on(run_client()) {
+        if let Ok((server_receiver, client_sender, join_set)) = AsyncRuntime::block_on(run_client())
+        {
             godot_print!("client running");
             self.server_receiver = Some(server_receiver);
             self.client_sender = Some(client_sender);
+            self.join_set = join_set;
         } else {
             godot_print!("failed to run client");
         }
