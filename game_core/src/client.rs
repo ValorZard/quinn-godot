@@ -3,6 +3,7 @@ use std::{error::Error, f32::consts::E, sync::Arc};
 
 use bytes::Bytes;
 use hecs::World;
+use tokio::sync::watch;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -120,12 +121,14 @@ async fn connect_channel_to_server(
     connection: Connection,
 ) -> Result<
     (
+        watch::Sender<bool>,
         async_channel::Receiver<ServerMessage>,
         async_channel::Sender<ClientMessage>,
         tokio::task::JoinSet<()>,
     ),
     Box<dyn Error + Send + Sync + 'static>,
 > {
+    let (cancel_sender, cancel_receiver) = watch::channel(false);
     println!("[client] connecting channel to server");
     let (mut send_stream, mut recv_stream) = connection
         .accept_bi()
@@ -138,9 +141,16 @@ async fn connect_channel_to_server(
     let (client_sender, client_receiver) = async_channel::unbounded::<ClientMessage>();
     // return handle to to the connection tasks so we can drop it later
     let mut join_set = tokio::task::JoinSet::new();
+    let cancel_rev = cancel_receiver.clone();
     join_set.spawn(async move {
         println!("[client] start receiving messages from server");
         loop {
+            // break loop if the cancel receiver is set to true
+            if *cancel_rev.borrow() {
+                println!("[client] cancel receiver is set to true, stopping receiving messages from server");
+                break;
+            }
+
             // get message from server
 
             // Read the delimiter first (to see that our frame has started)
@@ -182,12 +192,20 @@ async fn connect_channel_to_server(
         }
     });
 
+    let cancel_rev = cancel_receiver.clone();
     join_set.spawn(async move {
         println!(
             "[client] start sending messages to server, stream id: {}",
             send_stream.id()
         );
         loop {
+            // break loop if the cancel receiver is set to true
+            if *cancel_rev.borrow() {
+                println!(
+                    "[client] cancel receiver is set to true, stopping sending messages to server"
+                );
+                break;
+            }
             // get message from sync client code
             while let Ok(message) = client_receiver.recv().await {
                 let serialized_message = match serialize_client_message(&message) {
@@ -206,11 +224,12 @@ async fn connect_channel_to_server(
         }
     });
 
-    Ok((server_receiver, client_sender, join_set))
+    Ok((cancel_sender, server_receiver, client_sender, join_set))
 }
 
 pub async fn run_client() -> Result<
     (
+        watch::Sender<bool>,
         async_channel::Receiver<ServerMessage>,
         async_channel::Sender<ClientMessage>,
         tokio::task::JoinSet<()>,
@@ -219,6 +238,7 @@ pub async fn run_client() -> Result<
 > {
     let server_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
     let (endpoint, connection) = connect_to_server(server_address).await?;
-    let (server_receiver, client_sender, join_set) = connect_channel_to_server(connection).await?;
-    Ok((server_receiver, client_sender, join_set))
+    let (cancel_sender, server_receiver, client_sender, join_set) =
+        connect_channel_to_server(connection).await?;
+    Ok((cancel_sender, server_receiver, client_sender, join_set))
 }

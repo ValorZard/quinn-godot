@@ -21,7 +21,7 @@ use quinn::{
 use quinn_proto::crypto::rustls::QuicClientConfig;
 use rkyv::{Archived, de, rancor, ser};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-use tokio::task::JoinSet;
+use tokio::{sync::watch, task::JoinSet};
 
 pub type ChannelMap = Arc<Mutex<HashMap<PlayerId, MessageChannels>>>;
 
@@ -61,6 +61,7 @@ pub async fn run_server()
 
 #[derive(Debug)]
 pub struct MessageChannels {
+    pub cancel_sender: watch::Sender<bool>,
     pub receiver: async_channel::Receiver<ClientMessage>,
     pub sender: async_channel::Sender<ServerMessage>,
 }
@@ -108,6 +109,7 @@ pub async fn run_quinn_server(
             println!("[server] opened bidirectional stream");
             // Create a new player ID for this connection
             let player_id = conn.stable_id().to_string();
+            let (cancel_sender, cancel_receiver) = watch::channel(false);
             // channel to send from server to client
             let (server_sender, server_receiver) = async_channel::unbounded::<ServerMessage>();
             // channel to send from client to server
@@ -118,6 +120,7 @@ pub async fn run_quinn_server(
                 map.insert(
                     player_id.clone(),
                     MessageChannels {
+                        cancel_sender,
                         receiver: client_receiver,
                         sender: server_sender,
                     },
@@ -146,9 +149,14 @@ pub async fn run_quinn_server(
 
             let client_quit_sender = client_sender.clone();
 
+            let cancel_recv = cancel_receiver.clone();
+
             join_set.spawn(async move {
                 'sending_loop: loop {
-                    //println!("[server] waiting for messages to send");
+                    if *cancel_recv.borrow() {
+                        println!("[server] cancel receiver is set to true, stopping sending messages to client");
+                        break 'sending_loop;
+                    }
                     // get message from sync server code
                     while let Ok(message) = server_receiver.recv().await {
                         // serialize the message
@@ -173,12 +181,19 @@ pub async fn run_quinn_server(
                 }
             });
 
+            let cancel_recv = cancel_receiver.clone();
+
             join_set.spawn(async move {
                 println!(
                     "[server] (loop) waiting for messages from client, stream id: {}",
                     recv_stream.id()
                 );
                 'receive_loop: loop {
+                    if *cancel_recv.borrow() {
+                        println!("[server] cancel receiver is set to true, stopping receiving messages from client");
+                        break 'receive_loop;
+                    }
+
                     // get message from client
 
                     // first read the delimiter

@@ -173,4 +173,19 @@ impl IButton for ServerButton {
             }
         }
     }
+
+    fn exit_tree(&mut self) {
+        godot_print!("Server button is exiting the scene tree!");
+        // Clean up resources if necessary
+        if let Some(channel_map) = &self.channel_map {
+            let mut channel_map = channel_map.lock().unwrap();
+            for (_player_id, message_channels) in channel_map.iter() {
+                // shut down the tasks for each player
+                message_channels.cancel_sender.send(true).unwrap();
+            }
+            channel_map.clear(); // Clear the channel map on exit
+        }
+        // clean up the join set
+        //AsyncRuntime::block_on(self.join_set.shutdown());
+    }
 }

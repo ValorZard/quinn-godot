@@ -8,6 +8,7 @@ use godot::{
     prelude::*,
 };
 use hecs::World;
+use tokio::sync::watch;
 
 use crate::{
     async_runtime::AsyncRuntime,
@@ -17,6 +18,7 @@ use crate::{
 #[derive(GodotClass)]
 #[class(base=Button)]
 struct ClientButton {
+    cancel_sender: Option<watch::Sender<bool>>,
     server_receiver: Option<async_channel::Receiver<ServerMessage>>,
     client_sender: Option<async_channel::Sender<ClientMessage>>,
     join_set: tokio::task::JoinSet<()>,
@@ -36,6 +38,7 @@ struct ClientButton {
 impl IButton for ClientButton {
     fn init(base: Base<Button>) -> Self {
         Self {
+            cancel_sender: None,   // Initialize with None, will be set when the client starts
             server_receiver: None, // Initialize with None, will be set when the client starts
             client_sender: None,   // Initialize with None, will be set when the client starts
             join_set: tokio::task::JoinSet::new(), // Initialize an empty JoinSet
@@ -55,9 +58,11 @@ impl IButton for ClientButton {
 
     fn pressed(&mut self) {
         godot_print!("Client button pressed!");
-        if let Ok((server_receiver, client_sender, join_set)) = AsyncRuntime::block_on(run_client())
+        if let Ok((cancel_sender, server_receiver, client_sender, join_set)) =
+            AsyncRuntime::block_on(run_client())
         {
             godot_print!("client running");
+            self.cancel_sender = Some(cancel_sender);
             self.server_receiver = Some(server_receiver);
             self.client_sender = Some(client_sender);
             self.join_set = join_set;
@@ -196,6 +201,16 @@ impl IButton for ClientButton {
         }
 
         self.remote_player_amount = self.remote_player_map.len() as i32;
+    }
+
+    fn exit_tree(&mut self) {
+        godot_print!("Client button is exiting tree!");
+        // Cancel the client if it is running
+        if let Some(cancel_sender) = &self.cancel_sender {
+            let _ = cancel_sender.send(true);
+        }
+
+        //AsyncRuntime::block_on(self.join_set.shutdown());
     }
 }
 
