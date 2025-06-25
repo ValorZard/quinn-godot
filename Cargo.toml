@@ -4,7 +4,7 @@ members = ["game_core", "rust"]
 
 
 [workspace.dependencies]
-godot = {version = "0.3.1", features = ["api-4-4"]}
+godot = {version = "0.3.1", features = ["api-4-4", "experimental-threads"]}
 bytes = "1.10.1"
 quinn = "0.11.8"
 quinn-proto = "0.11.12"
