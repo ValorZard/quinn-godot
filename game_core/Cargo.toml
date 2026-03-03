@@ -7,7 +7,6 @@ edition = "2024"
 rkyv.workspace = true
 tokio.workspace = true
 quinn.workspace = true
-quinn-proto.workspace = true
 bytes.workspace = true
 hecs.workspace = true
 async-channel.workspace = true

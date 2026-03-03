@@ -7,7 +7,6 @@ members = ["game_core", "rust"]
 godot = {git = "https://github.com/godot-rust/gdext.git", rev = "c60c107992211f367d7fb564fb9892fdc1514bf5", features = ["api-4-6", "experimental-threads"]}
 bytes = "1.11.1"
 quinn = "0.11.9"
-quinn-proto = "0.11.13"
 rcgen = "0.14.7"
 tokio = { version = "1.49", features = ["full"] }
 async-channel = "2.5.0"

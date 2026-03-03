@@ -11,7 +11,7 @@ use quinn::{
     ClientConfig, Connection, Endpoint,
     rustls::{self},
 };
-use quinn_proto::crypto::rustls::QuicClientConfig;
+use quinn::crypto::rustls::QuicClientConfig;
 use rkyv::rancor;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 

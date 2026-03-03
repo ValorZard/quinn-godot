@@ -282,7 +282,6 @@ dependencies = [
  "bytes",
  "hecs",
  "quinn",
- "quinn-proto",
  "rcgen",
  "rkyv",
  "tokio",
