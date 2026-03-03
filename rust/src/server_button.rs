@@ -123,9 +123,7 @@ impl IButton for ServerButton {
                 .world
                 .query::<(&PlayerId, &PlayerPosition)>()
                 .iter()
-                .map(|(id, position)| {
-                    ServerMessage::PlayerPosition(id.clone(), *position)
-                })
+                .map(|(id, position)| ServerMessage::PlayerPosition(id.clone(), *position))
                 .collect::<Vec<ServerMessage>>();
 
             for (player_id, message_channels) in channel_map.iter() {

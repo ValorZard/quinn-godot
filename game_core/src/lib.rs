@@ -1,4 +1,4 @@
-use rkyv::{Archive, Deserialize, Serialize, rancor};
+use rkyv::{Archive, Deserialize, Serialize};
 
 pub mod client;
 pub mod server;

@@ -1,24 +1,19 @@
-use core::net;
-use std::{error::Error, f32::consts::E, sync::Arc};
+use std::{error::Error, sync::Arc};
 
-use bytes::Bytes;
-use hecs::World;
 use tokio::sync::watch;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use crate::{
-    ClientMessage, DELIMITER, MAX_PACKET_SIZE, MessageSize, PlayerId, PlayerPosition, ServerMessage,
+    ClientMessage, MessageSize, ServerMessage,
 };
 use quinn::{
-    ClientConfig, Connection, Endpoint, RecvStream, SendStream, ServerConfig, VarInt,
-    rustls::{self, pki_types::PrivatePkcs8KeyDer},
+    ClientConfig, Connection, Endpoint,
+    rustls::{self},
 };
 use quinn_proto::crypto::rustls::QuicClientConfig;
-use rkyv::{Archived, rancor, ser};
+use rkyv::rancor;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-
-use crate::server;
 
 async fn connect_to_server(
     server_addr: SocketAddr,

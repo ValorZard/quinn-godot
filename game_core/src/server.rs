@@ -10,17 +10,14 @@ use std::{
 };
 
 use crate::{
-    ClientMessage, DELIMITER, MAX_PACKET_SIZE, MessageSize, PlayerId, PlayerPosition, ServerMessage,
+    ClientMessage, DELIMITER, MessageSize, PlayerId, ServerMessage,
 };
-use bytes::Bytes;
-use hecs::World;
 use quinn::{
-    ClientConfig, Endpoint, SendStream, ServerConfig, VarInt,
-    rustls::{self, client, pki_types::PrivatePkcs8KeyDer},
+    Endpoint, ServerConfig,
+    rustls::{self, pki_types::PrivatePkcs8KeyDer},
 };
-use quinn_proto::crypto::rustls::QuicClientConfig;
-use rkyv::{Archived, de, rancor, ser};
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rkyv::rancor;
+use rustls::pki_types::CertificateDer;
 use tokio::{sync::watch, task::JoinSet};
 
 pub type ChannelMap = Arc<Mutex<HashMap<PlayerId, MessageChannels>>>;
