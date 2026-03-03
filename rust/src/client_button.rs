@@ -218,6 +218,7 @@ impl IButton for ClientButton {
 impl ClientButton {
     #[func]
     fn get_local_player_id(&self) -> GString {
-        self.local_player_id.to_string().into()
+        GString::from(&self.local_player_id)
     }
 }
+    

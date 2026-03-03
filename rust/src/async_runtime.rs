@@ -7,7 +7,7 @@ use tokio::{
 };
 
 #[derive(GodotClass)]
-#[class(base=Object)]
+#[class(singleton, base=Object)]
 pub struct AsyncRuntime {
     base: Base<Object>,
     runtime: Rc<Runtime>,
@@ -37,12 +37,10 @@ impl IObject for AsyncRuntime {
 
 #[godot_api]
 impl AsyncRuntime {
-    pub const SINGLETON: &'static str = "Tokio";
-
     /// This function has no real use for the user, only to make it easier
     /// for this crate to access the singleton object.
     fn singleton() -> Option<Gd<AsyncRuntime>> {
-        match Engine::singleton().get_singleton(Self::SINGLETON) {
+        match Engine::singleton().get_singleton(&Self::class_id().to_string_name()) {
             Some(singleton) => Some(singleton.cast::<Self>()),
             None => None,
         }
@@ -53,24 +51,10 @@ impl AsyncRuntime {
     /// Gets the active runtime under the [`AsyncRuntime`] singleton. This can panic if the singleton is unreachable,
     /// or has no ability to be registered by the engine.
     pub fn runtime() -> Rc<Runtime> {
-        match Self::singleton() {
-            Some(singleton) => {
-                let bind = singleton.bind();
-                Rc::clone(&bind.runtime)
-            }
-            None => {
-                // Assuming the user forgot to register the singleton, let's do it for them as a fail safe.
-                Engine::singleton()
-                    .register_singleton(AsyncRuntime::SINGLETON, &AsyncRuntime::new_alloc());
-
-                // We can panic here because something fundementally wrong has happend.
-                let singleton = Self::singleton()
-                    .expect("Engine was not able to register, or get `AsyncRuntime` singleton!");
-
-                let bind = singleton.bind();
-                Rc::clone(&bind.runtime)
-            }
-        }
+        let singleton = Self::singleton()
+            .expect("Engine was not able to register, or get `AsyncRuntime` singleton!");
+        let bind = singleton.bind();
+        Rc::clone(&bind.runtime)
     }
 
     /// A wrapper function for the [`tokio::spawn`] function.

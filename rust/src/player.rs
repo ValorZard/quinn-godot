@@ -93,7 +93,7 @@ impl Player {
 
     #[func]
     fn get_player_id(&self) -> GString {
-        self.player_id.to_string().into()
+        GString::from(&self.player_id)
     }
 
     #[signal]
