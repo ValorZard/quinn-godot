@@ -149,7 +149,13 @@ impl IButton for ClientButton {
                             }
 
                             godot_print!("[client] Player left with ID: {}", player_id);
-                            // Remove player from the world
+                            
+                            // Remove from Godot scene tree
+                            if let Some(mut remote_player) = self.remote_player_map.remove(&player_id) {
+                                remote_player.queue_free();
+                            }
+                            
+                            // Remove player from the ECS world
                             let query = self.world.query_mut::<(Entity, &PlayerId)>();
                             let mut entities_to_despawn = Vec::new();
                             for (entity, id) in query {
