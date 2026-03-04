@@ -10,14 +10,25 @@ use hecs::{Entity, World};
 
 use crate::{async_runtime::AsyncRuntime, player::Player};
 
-pub type ClientTuple = (Client, Gd<Player>);
+pub enum NetworkState {
+    ClientConnection(Client, Gd<Player>),
+    ServerConnection(Server),
+    HostConnection(Client, Gd<Player>, Server),
+    None,
+}
+
+impl Default for NetworkState {
+    fn default() -> Self {
+        NetworkState::None
+    }
+}
+
 
 #[derive(GodotClass)]
 #[class(init, singleton, base = Object)]
 pub struct GameState {
     base: Base<Object>,
-    pub client_tuple: Option<ClientTuple>,
-    pub server: Option<Server>,
+    pub network_state: NetworkState,
     world: World,
     remote_player_map: HashMap<PlayerId, Gd<Player>>,
     player_template: Option<Gd<PackedScene>>,
@@ -29,7 +40,7 @@ impl GameState {
     pub fn player_joined(remote_player: Gd<Player>);
 
     pub fn start_server(&mut self) {
-        self.server = Some(Server::new());
+        self.network_state = NetworkState::ServerConnection(Server::new());
     }
 
     pub fn start_client(&mut self, player_template: Gd<PackedScene>) -> Option<Gd<Player>> {
@@ -39,7 +50,7 @@ impl GameState {
         {
             godot_print!("client running");
             let player_ref = player_template.instantiate_as::<Player>();
-            self.client_tuple = Some((
+            self.network_state = NetworkState::ClientConnection(
                 Client {
                     cancel_sender,
                     server_receiver,
@@ -48,7 +59,7 @@ impl GameState {
                     local_player_id: game_core::DEFAULT_PLAYER_ID,
                 },
                 player_ref.clone(),
-            ));
+            );
             Some(player_ref)
         } else {
             godot_print!("failed to run client");
@@ -58,7 +69,7 @@ impl GameState {
 
     pub fn poll_client(&mut self) {
         let mut players_to_signal: Vec<Gd<Player>> = Vec::new();
-        if let Some((client, player_ref)) = &mut self.client_tuple {
+        if let NetworkState::ClientConnection(client, player_ref) = &mut self.network_state {
             // This is where you can handle any client-related logic
             // For example, you might want to check for incoming messages from the server
 
@@ -204,12 +215,12 @@ impl GameState {
     }
 
     pub fn close_client(&mut self) {
-        if let Some((client, _)) = &mut self.client_tuple {
+        if let NetworkState::ClientConnection(client, _) = &mut self.network_state {
             // Cancel the client if it is running
             let _ = client.cancel_sender.send(true);
             // Optionally, you can also wait for the client's tasks to finish
             AsyncRuntime::block_on(client.join_set.shutdown());
-            self.client_tuple = None;
+            self.network_state = NetworkState::None;
         }
     }
 
@@ -217,12 +228,10 @@ impl GameState {
     pub fn get_local_player_id(&self) -> GString {
         let singleton = GameState::singleton();
         let singleton = singleton.bind();
-        let client = singleton.client_tuple.as_ref().map(|(client, _)| client);
-        if let Some(client) = client {
-            GString::from(&client.local_player_id)
-        } else {
-            GString::from(&DEFAULT_PLAYER_ID)
+        if let NetworkState::ClientConnection(client, _) = &singleton.network_state {
+            return GString::from(&client.local_player_id);
         }
+        GString::from(&DEFAULT_PLAYER_ID)
     }
 
     #[func]

@@ -82,11 +82,6 @@ impl ClientButton {
     fn get_local_player_id(&self) -> GString {
         let singleton = GameState::singleton();
         let singleton = singleton.bind();
-        let client = singleton.client_tuple.as_ref().map(|(client, _)| client);
-        if let Some(client) = client {
-            GString::from(&client.local_player_id)
-        } else {
-            GString::from(&DEFAULT_PLAYER_ID)
-        }
+        singleton.get_local_player_id()
     }
 }
