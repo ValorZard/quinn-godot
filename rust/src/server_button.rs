@@ -6,7 +6,7 @@ use godot::{
 use hecs::{Entity, World};
 use tokio::task::JoinSet;
 
-use crate::async_runtime::AsyncRuntime;
+use crate::{async_runtime::AsyncRuntime, game_state::GameState};
 
 #[derive(GodotClass)]
 #[class(base=Button)]
@@ -35,155 +35,24 @@ impl IButton for ServerButton {
     fn pressed(&mut self) {
         godot_print!("Server button pressed!");
         // we are going to shove this in here for now for testing purposes
-        if let Ok((channel_map, join_set)) = AsyncRuntime::block_on(run_server()) {
-            godot_print!("server running");
-            self.channel_map = Some(channel_map);
-            self.join_set = join_set;
-        } else {
-            godot_print!("failed to run server");
-        }
+        let mut singleton = GameState::singleton();
+        let mut singleton = singleton.bind_mut();
+        singleton.start_server();
     }
 
     fn process(&mut self, _delta: f64) {
         // This is where you can handle any server-related logic
         // For example, you might want to check for incoming connections or messages
-        if let Some(channel_map) = &self.channel_map {
-            // Handle server logic with the channel_map
-            let mut channel_map = channel_map.lock().unwrap();
-            let mut new_player_vec = Vec::<PlayerId>::new();
-            let mut leaving_player_vec = Vec::<PlayerId>::new();
-            for (player_id, channel) in channel_map.iter() {
-                match channel.receiver.try_recv() {
-                    Ok(message) => {
-                        //godot_print!("Received message from player {}: {:?}", player_id, message);
-                        // Handle the received message
-                        match message {
-                            ClientMessage::PlayerPosition(player_position) => {
-                                // Update player position in the world
-                                let query =
-                                    self.world.query_mut::<(&PlayerId, &mut PlayerPosition)>();
-                                for (id, position) in query {
-                                    if *id == *player_id {
-                                        *position = player_position;
-                                        /*
-                                        godot_print!(
-                                            "Player {} position: {:?}",
-                                            player_id,
-                                            player_position
-                                        );
-                                        */
-                                    }
-                                }
-                            }
-                            ClientMessage::PlayerJoined { player_id } => {
-                                godot_print!("Player {} joined", player_id);
-                                self.world
-                                    .spawn((player_id.clone(), PlayerPosition { x: 0.0, y: 0.0 }));
-                                new_player_vec.push(player_id.clone());
-                                // send list of players to player who just joined
-                                let player_ids: Vec<PlayerId> =
-                                    channel_map.keys().cloned().collect();
-                                if let Some(entry) = channel_map.get(&player_id) {
-                                    entry
-                                        .sender
-                                        .clone()
-                                        .try_send(ServerMessage::PlayerJoined { player_ids })
-                                        .unwrap();
-                                }
-                            }
-                            ClientMessage::Quit { player_id } => {
-                                godot_print!("Player {} left", player_id);
-                                leaving_player_vec.push(player_id.clone());
-                                // remove entities associated with this player
-                                let query = self.world.query_mut::<(Entity, &PlayerId)>();
-                                let mut entities_to_despawn = Vec::new();
-                                for (entity, id) in query {
-                                    if *id == player_id {
-                                        entities_to_despawn.push(entity);
-                                    }
-                                }
-                                for entity in entities_to_despawn {
-                                    self.world.despawn(entity).unwrap();
-                                }
-                            }
-                        }
-                    }
-                    Err(async_channel::TryRecvError::Empty) => {
-                        // No messages available, continue processing
-                    }
-                    Err(async_channel::TryRecvError::Closed) => {
-                        godot_print!("Channel for player {} closed", player_id);
-                        // Handle the closed channel if necessary
-                    }
-                }
-            }
-
-            // Send messages to clients
-            let game_data = self
-                .world
-                .query::<(&PlayerId, &PlayerPosition)>()
-                .iter()
-                .map(|(id, position)| ServerMessage::PlayerPosition(id.clone(), *position))
-                .collect::<Vec<ServerMessage>>();
-
-            for (player_id, message_channels) in channel_map.iter() {
-                // Get player position in the world
-                let server_sender = &message_channels.sender;
-                // send game data to each player
-                for game_data_message in &game_data {
-                    // Send player position to the client
-                    if let Err(e) = server_sender.try_send(game_data_message.clone()) {
-                        godot_print!("Failed to send message to player {}: {}", player_id, e);
-                    }
-                }
-                // Send new player messages
-                if !new_player_vec.is_empty() {
-                    // send new player message to all players
-                    let new_player_message = ServerMessage::PlayerJoined {
-                        player_ids: new_player_vec.clone(),
-                    };
-                    if let Err(e) = server_sender.try_send(new_player_message) {
-                        godot_print!(
-                            "Failed to send new player message to player {}: {}",
-                            player_id,
-                            e
-                        );
-                    }
-                }
-                // Send leaving player messages
-                if !leaving_player_vec.is_empty() {
-                    let leaving_player_message = ServerMessage::PlayerLeft {
-                        player_ids: leaving_player_vec.clone(),
-                    };
-                    if let Err(e) = server_sender.try_send(leaving_player_message) {
-                        godot_print!(
-                            "Failed to send leaving player message to player {}: {}",
-                            player_id,
-                            e
-                        );
-                    }
-                }
-            }
-
-            // remove channels from players that have left
-            for player_id in &leaving_player_vec {
-                channel_map.remove(player_id);
-            }
-        }
+        let mut singleton = GameState::singleton();
+        let mut singleton = singleton.bind_mut();
+        singleton.poll_server();
     }
 
     fn exit_tree(&mut self) {
         godot_print!("Server button is exiting the scene tree!");
         // Clean up resources if necessary
-        if let Some(channel_map) = &self.channel_map {
-            let mut channel_map = channel_map.lock().unwrap();
-            for (_player_id, message_channels) in channel_map.iter() {
-                // shut down the tasks for each player
-                message_channels.cancel_sender.send(true).unwrap();
-            }
-            channel_map.clear(); // Clear the channel map on exit
-        }
-        // clean up the join set
-        //AsyncRuntime::block_on(self.join_set.shutdown());
+        let mut singleton = GameState::singleton();
+        let mut singleton = singleton.bind_mut();
+        singleton.close_server();
     }
 }

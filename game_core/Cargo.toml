@@ -11,3 +11,4 @@ bytes.workspace = true
 hecs.workspace = true
 async-channel.workspace = true
 rcgen.workspace = true
+console-subscriber.workspace = true

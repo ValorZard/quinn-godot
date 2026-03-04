@@ -44,14 +44,17 @@ fn configure_server()
 }
 
 pub async fn run_server()
--> Result<(ChannelMap, JoinSet<JoinSet<()>>), Box<dyn Error + Send + Sync + 'static>> {
+-> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
     //console_subscriber::init();
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
     let channel_map = Arc::new(Mutex::new(HashMap::<PlayerId, MessageChannels>::new()));
     let mut join_set = JoinSet::new();
     join_set.spawn(run_quinn_server(addr, channel_map.clone()));
 
-    Ok((channel_map, join_set))
+    Ok(Server {
+        channel_map,
+        join_set,
+    })
 }
 
 #[derive(Debug)]
@@ -84,6 +87,7 @@ pub async fn run_quinn_server(
     addr: SocketAddr,
     channel_map: ChannelMap,
 ) -> tokio::task::JoinSet<()> {
+    console_subscriber::init();
     let (endpoint, _server_cert) = make_server_endpoint(addr).unwrap();
 
     // add join set to make sure we don't leak any tasks
@@ -231,10 +235,8 @@ pub async fn run_quinn_server(
     join_set
 }
 
-pub struct Server {}
-
-impl Server {
-    pub fn new() -> Self {
-        Self {}
-    }
+pub struct Server {
+    pub channel_map: ChannelMap,
+    pub join_set: JoinSet<JoinSet<()>>,
 }
+
