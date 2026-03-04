@@ -68,11 +68,10 @@ impl GameState {
     }
 
     pub fn poll_client(&mut self) {
-        let mut players_to_signal: Vec<Gd<Player>> = Vec::new();
         if let NetworkState::ClientConnection(client, player_ref) = &mut self.network_state {
             // This is where you can handle any client-related logic
             // For example, you might want to check for incoming messages from the server
-
+            let mut players_to_signal: Vec<Gd<Player>> = Vec::new();
             let server_receiver = client.server_receiver.clone();
             while let Ok(message) = server_receiver.try_recv() {
                 //godot_print!("Received message from server: {:?}", message);
@@ -208,9 +207,9 @@ impl GameState {
                     godot_print!("Failed to send player position: {:?}", e);
                 }
             }
-        }
-        for player in &players_to_signal {
-            self.signals().player_joined().emit(player);
+            for player in &players_to_signal {
+                self.signals().player_joined().emit(player);
+            }
         }
     }
 
