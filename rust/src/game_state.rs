@@ -23,7 +23,6 @@ impl Default for NetworkState {
     }
 }
 
-
 #[derive(GodotClass)]
 #[class(init, singleton, base = Object)]
 pub struct GameState {
@@ -366,7 +365,7 @@ impl GameState {
                 message_channels.cancel_sender.send(true).unwrap();
             }
             channel_map.clear(); // Clear the channel map on exit
-        
+
             // clean up the join set
             AsyncRuntime::block_on(server.join_set.shutdown());
         }

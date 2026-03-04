@@ -43,8 +43,7 @@ fn configure_server()
     Ok((server_config, cert_der))
 }
 
-pub async fn run_server()
--> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
+pub async fn run_server() -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
     //console_subscriber::init();
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
     let channel_map = Arc::new(Mutex::new(HashMap::<PlayerId, MessageChannels>::new()));
@@ -239,4 +238,3 @@ pub struct Server {
     pub channel_map: ChannelMap,
     pub join_set: JoinSet<JoinSet<()>>,
 }
-
