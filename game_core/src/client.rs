@@ -4,14 +4,12 @@ use tokio::sync::watch;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-use crate::{
-    ClientMessage, MessageSize, ServerMessage,
-};
+use crate::{ClientMessage, MessageSize, PlayerId, ServerMessage};
+use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{
     ClientConfig, Connection, Endpoint,
     rustls::{self},
 };
-use quinn::crypto::rustls::QuicClientConfig;
 use rkyv::rancor;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 
@@ -236,4 +234,12 @@ pub async fn run_client() -> Result<
     let (cancel_sender, server_receiver, client_sender, join_set) =
         connect_channel_to_server(connection).await?;
     Ok((cancel_sender, server_receiver, client_sender, join_set))
+}
+
+pub struct Client {
+    pub cancel_sender: watch::Sender<bool>,
+    pub server_receiver: async_channel::Receiver<ServerMessage>,
+    pub client_sender: async_channel::Sender<ClientMessage>,
+    pub join_set: tokio::task::JoinSet<()>,
+    pub local_player_id: PlayerId,
 }

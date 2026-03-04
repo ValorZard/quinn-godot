@@ -9,9 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{
-    ClientMessage, DELIMITER, MessageSize, PlayerId, ServerMessage,
-};
+use crate::{ClientMessage, DELIMITER, MessageSize, PlayerId, ServerMessage};
 use quinn::{
     Endpoint, ServerConfig,
     rustls::{self, pki_types::PrivatePkcs8KeyDer},
@@ -231,4 +229,12 @@ pub async fn run_quinn_server(
     });
 
     join_set
+}
+
+pub struct Server {}
+
+impl Server {
+    pub fn new() -> Self {
+        Self {}
+    }
 }

@@ -1,18 +1,13 @@
 [gd_scene format=3 uid="uid://c7iskwgu5aphr"]
 
 [ext_resource type="Script" uid="uid://xiitkxt8t3nd" path="res://main.gd" id="1_h2yge"]
-[ext_resource type="Texture2D" uid="uid://dcvpakna8i04d" path="res://godot-rust.png" id="1_ig7tw"]
 [ext_resource type="PackedScene" uid="uid://rf26uexeggc1" path="res://remote_player.tscn" id="2_0xm2m"]
 
 [node name="Node2D" type="Node2D" unique_id=1107677338]
 script = ExtResource("1_h2yge")
 
-[node name="Player" type="Player" parent="." unique_id=522714517]
-position = Vector2(903, 491)
-texture = ExtResource("1_ig7tw")
-
 [node name="ClientButton" type="ClientButton" parent="." unique_id=1502964895 node_paths=PackedStringArray("player_ref")]
-player_ref = NodePath("../Player")
+player_ref = NodePath("")
 remote_player_ref = ExtResource("2_0xm2m")
 offset_left = 108.0
 offset_top = 430.0
