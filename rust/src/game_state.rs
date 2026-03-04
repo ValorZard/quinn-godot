@@ -38,6 +38,7 @@ impl GameState {
     #[signal]
     pub fn player_joined(remote_player: Gd<Player>);
 
+    #[func]
     pub fn start_server(&mut self) {
         if let Ok(server) = AsyncRuntime::block_on(run_server()) {
             godot_print!("server running");
@@ -47,7 +48,9 @@ impl GameState {
         }
     }
 
+    #[func]
     pub fn start_client(&mut self, player_template: Gd<PackedScene>) -> Option<Gd<Player>> {
+        godot_print!("starting client");
         if let Ok((cancel_sender, server_receiver, client_sender, join_set)) =
             AsyncRuntime::block_on(run_client())
         {
@@ -71,6 +74,7 @@ impl GameState {
         }
     }
 
+    #[func]
     pub fn poll_client(&mut self) {
         if let NetworkState::ClientConnection(client, player_ref) = &mut self.network_state {
             // This is where you can handle any client-related logic
@@ -217,6 +221,7 @@ impl GameState {
         }
     }
 
+    #[func]
     pub fn poll_server(&mut self) {
         // This is where you can handle any server-related logic
         // For example, you might want to check for incoming connections or messages
@@ -345,6 +350,7 @@ impl GameState {
         }
     }
 
+    #[func]
     pub fn close_client(&mut self) {
         if let NetworkState::ClientConnection(client, _) = &mut self.network_state {
             // Cancel the client if it is running
@@ -355,6 +361,7 @@ impl GameState {
         }
     }
 
+    #[func]
     pub fn close_server(&mut self) {
         if let NetworkState::ServerConnection(server) = &mut self.network_state {
             // Clean up resources if necessary

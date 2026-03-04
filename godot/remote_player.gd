@@ -3,6 +3,7 @@ extends Player
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
+	print("player puppet spawned")
 	pass # Replace with function body.
 
 

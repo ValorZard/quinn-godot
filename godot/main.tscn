@@ -5,10 +5,9 @@
 
 [node name="Node2D" type="Node2D" unique_id=1107677338]
 script = ExtResource("1_h2yge")
+player_template = ExtResource("2_0xm2m")
 
-[node name="ClientButton" type="ClientButton" parent="." unique_id=1502964895 node_paths=PackedStringArray("player_ref")]
-player_ref = NodePath("")
-remote_player_ref = ExtResource("2_0xm2m")
+[node name="ClientButton" type="Button" parent="." unique_id=1886972386]
 offset_left = 108.0
 offset_top = 430.0
 offset_right = 391.0
@@ -21,7 +20,7 @@ layout_mode = 0
 offset_right = 40.0
 offset_bottom = 23.0
 
-[node name="ServerButton" type="ServerButton" parent="." unique_id=1117556214]
+[node name="ServerButton" type="Button" parent="." unique_id=1677408417]
 offset_left = 182.0
 offset_top = 161.0
 offset_right = 343.0
@@ -39,4 +38,5 @@ offset_bottom = 85.0
 text = "To run game from Host end:
 Click Server and then click client"
 
+[connection signal="button_down" from="ClientButton" to="." method="_on_client_button_button_down"]
 [connection signal="pressed" from="ServerButton" to="." method="_on_server_button_pressed"]
