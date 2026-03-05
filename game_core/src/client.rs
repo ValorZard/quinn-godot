@@ -28,7 +28,7 @@ async fn connect_to_server(
             .with_no_client_auth(),
     )?));
     let mut transport = quinn::TransportConfig::default();
-    transport.max_concurrent_uni_streams(VarInt::MAX);
+    transport.max_concurrent_uni_streams(128_u8.into());
     client_config.transport_config(Arc::new(transport));
     endpoint.set_default_client_config(client_config);
 
@@ -394,6 +394,7 @@ async fn connect_client_to_server(
 }
 
 pub async fn run_client() -> Result<Client, Box<dyn Error + Send + Sync + 'static>> {
+    console_subscriber::init();
     let server_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
     let (endpoint, connection) = connect_to_server(server_address).await?;
     let client = connect_client_to_server(connection).await?;

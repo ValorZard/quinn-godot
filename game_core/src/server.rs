@@ -40,7 +40,7 @@ fn configure_server()
     let mut server_config =
         ServerConfig::with_single_cert(vec![cert_der.clone()], priv_key.into())?;
     let transport_config = Arc::get_mut(&mut server_config.transport).unwrap();
-    transport_config.max_concurrent_uni_streams(VarInt::MAX);
+    transport_config.max_concurrent_uni_streams(128_u8.into());
 
     Ok((server_config, cert_der))
 }
@@ -307,7 +307,6 @@ pub async fn run_quinn_server(
     addr: SocketAddr,
     channel_map: ChannelMap,
 ) -> tokio::task::JoinSet<()> {
-    //console_subscriber::init();
     let (endpoint, _server_cert) = make_server_endpoint(addr).unwrap();
 
     // add join set to make sure we don't leak any tasks
