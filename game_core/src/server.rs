@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    DELIMITER, MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage, UNIDIRECTIONAL_STREAM_LIMIT, UnreliableClientMessage, UnreliableServerMessage
+    DELIMITER, LogSender, MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage, UNIDIRECTIONAL_STREAM_LIMIT, UnreliableClientMessage, UnreliableServerMessage, log
 };
 use quinn::{
     Endpoint, ServerConfig, VarInt, rustls::{self, pki_types::PrivatePkcs8KeyDer}
@@ -48,12 +48,14 @@ pub async fn run_server() -> Result<Server, Box<dyn Error + Send + Sync + 'stati
     //console_subscriber::init();
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
     let channel_map = Arc::new(Mutex::new(HashMap::<PlayerId, MessageChannels>::new()));
+    let (log_sender, log_receiver) = async_channel::unbounded::<String>();
     let mut join_set = JoinSet::new();
-    join_set.spawn(run_quinn_server(addr, channel_map.clone()));
+    join_set.spawn(run_quinn_server(addr, channel_map.clone(), log_sender));
 
     Ok(Server {
         channel_map,
         join_set,
+        log_receiver,
     })
 }
 
@@ -108,12 +110,11 @@ pub async fn run_reliable_server_send_stream(
     reliable_server_receiver: async_channel::Receiver<ReliableServerMessage>,
     reliable_client_sender: async_channel::Sender<ReliableClientMessage>,
     player_id: PlayerId,
+    log_sender: LogSender,
 ) {
     'sending_loop: loop {
         if *cancel_recv.borrow() {
-            println!(
-                "[server] cancel receiver is set to true, stopping sending messages to client"
-            );
+            log(&log_sender, "[server] cancel receiver is set to true, stopping sending messages to client".into()).await;
             break 'sending_loop;
         }
         // get message from sync server code
@@ -123,7 +124,7 @@ pub async fn run_reliable_server_send_stream(
                 serialize_reliable_server_message(&message).expect("Failed to serialize message");
             // then send the serialized message
             if let Err(e) = send_stream.write_all(&serialized_message).await {
-                println!("[server] failed to send message: {:?}, {e}", message);
+                log(&log_sender, format!("[server] failed to send message: {:?}, {e}", message)).await;
 
                 // special edge case for quitting
                 if let Ok(()) = reliable_client_sender
@@ -132,9 +133,8 @@ pub async fn run_reliable_server_send_stream(
                     })
                     .await
                 {
-                    println!("[server] sent quit message to client");
+                    log(&log_sender, "[server] sent quit message to client".into()).await;
                 }
-                //break 'sending_loop;
             }
         }
     }
@@ -144,16 +144,12 @@ pub async fn run_reliable_server_recv_stream(
     mut recv_stream: quinn::RecvStream,
     cancel_recv: watch::Receiver<bool>,
     reliable_client_sender: async_channel::Sender<ReliableClientMessage>,
+    log_sender: LogSender,
 ) {
-    println!(
-        "[server] (loop) waiting for messages from client, stream id: {}",
-        recv_stream.id()
-    );
+    log(&log_sender, format!("[server] (loop) waiting for messages from client, stream id: {}", recv_stream.id())).await;
     'receive_loop: loop {
         if *cancel_recv.borrow() {
-            println!(
-                "[server] cancel receiver is set to true, stopping receiving messages from client"
-            );
+            log(&log_sender, "[server] cancel receiver is set to true, stopping receiving messages from client".into()).await;
             break 'receive_loop;
         }
 
@@ -162,20 +158,20 @@ pub async fn run_reliable_server_recv_stream(
         // first read the delimiter
         let mut delimiter_buf = [0; 1];
         if let Err(e) = recv_stream.read_exact(&mut delimiter_buf).await {
-            println!("[server] failed to read delimiter: {e}");
+            log(&log_sender, format!("[server] failed to read delimiter: {e}")).await;
             // If we fail to read the delimiter, it means the client has disconnected
             break 'receive_loop;
         }
 
         if delimiter_buf != DELIMITER {
-            println!("[server] received invalid delimiter: {:?}", delimiter_buf);
+            log(&log_sender, format!("[server] received invalid delimiter: {:?}", delimiter_buf)).await;
             continue 'receive_loop;
         }
 
         // Read the size of the message
         let mut size_buf: MessageSize = [0u8; 4];
         if let Err(e) = recv_stream.read_exact(&mut size_buf).await {
-            println!("[server] failed to read size: {e}");
+            log(&log_sender, format!("[server] failed to read size: {e}")).await;
             continue 'receive_loop;
         }
         // Convert the size from bytes to u32
@@ -183,13 +179,10 @@ pub async fn run_reliable_server_recv_stream(
         // then read the actual message (only read as much as we need)
         let mut buf = vec![0u8; size as usize];
         if let Ok(()) = recv_stream.read_exact(&mut buf).await {
-            //println!("[server] buffer size {}", size);
             // Deserialize the message
             let message = rkyv::from_bytes::<ReliableClientMessage, rancor::Error>(&buf).unwrap();
-            //println!("[server] received message: {:?}", message);
             reliable_client_sender.send(message).await.unwrap();
         }
-        //println!("[server] buffer {:?}", buf);
     }
 }
 
@@ -197,20 +190,16 @@ async fn read_unreliable_client_message(
     connection: quinn::Connection,
     cancel_recv: watch::Receiver<bool>,
     unreliable_message_sender: async_channel::Sender<UnreliableClientMessage>,
+    log_sender: LogSender,
 ) {
-    println!(
-        "[server] (loop) waiting for unreliable messages from client, connection id: {}",
-        connection.stable_id()
-    );
-    println!("[server] start receiving unreliable messages from client");
+    log(&log_sender, format!("[server] (loop) waiting for unreliable messages from client, connection id: {}", connection.stable_id())).await;
+    log(&log_sender, "[server] start receiving unreliable messages from client".into()).await;
     'incoming_loop: loop {
         match connection.accept_uni().await {
             Ok(mut recv_stream) => {
                 // break loop if the cancel receiver is set to true
                 if *cancel_recv.borrow() {
-                    println!(
-                        "[server] cancel receiver is set to true, stopping receiving messages from client"
-                    );
+                    log(&log_sender, "[server] cancel receiver is set to true, stopping receiving messages from client".into()).await;
                     break;
                 }
 
@@ -219,17 +208,17 @@ async fn read_unreliable_client_message(
                 // Read the delimiter first (to see that our frame has started)
                 let mut delimiter_buf = [0u8; 1];
                 if let Err(e) = recv_stream.read_exact(&mut delimiter_buf).await {
-                    println!("[server] failed to read delimiter: {e}");
+                    log(&log_sender, format!("[server] failed to read delimiter: {e}")).await;
                     continue;
                 }
                 if delimiter_buf != crate::DELIMITER {
-                    println!("[server] received invalid delimiter: {:?}", delimiter_buf);
+                    log(&log_sender, format!("[server] received invalid delimiter: {:?}", delimiter_buf)).await;
                     continue;
                 }
                 // Read the size of the message
                 let mut size_buf: MessageSize = [0u8; 4];
                 if let Err(e) = recv_stream.read_exact(&mut size_buf).await {
-                    println!("[server] failed to read size: {e}");
+                    log(&log_sender, format!("[server] failed to read size: {e}")).await;
                     continue;
                 }
                 // Convert the size from bytes to u32
@@ -237,25 +226,18 @@ async fn read_unreliable_client_message(
                 // then read the actual message (only read as much as we need)
                 let mut buf = vec![0u8; size as usize];
                 if let Ok(()) = recv_stream.read_exact(&mut buf).await {
-                    //println!("bytes read: {:?}", buf);
                     let client_message =
                         rkyv::from_bytes::<UnreliableClientMessage, rancor::Error>(&buf).unwrap();
                     if let Err(send_error) = unreliable_message_sender.send(client_message).await {
-                        println!(
-                            "[server] failed to send message to server receiver: {}",
-                            send_error
-                        );
+                        log(&log_sender, format!("[server] failed to send message to server receiver: {}", send_error)).await;
                     }
                 } else {
-                    println!(
-                        "[server] failed to receive message from client, stream id: {}",
-                        recv_stream.id()
-                    );
+                    log(&log_sender, format!("[server] failed to receive message from client, stream id: {}", recv_stream.id())).await;
                 }
                 recv_stream.stop(VarInt::from_u32(0)).ok();
             }
             Err(e) => {
-                println!("[server] failed to accept unidirectional stream: {}", e);
+                log(&log_sender, format!("[server] failed to accept unidirectional stream: {}", e)).await;
                 break 'incoming_loop;
             }
         }
@@ -266,22 +248,21 @@ async fn send_unreliable_server_message(
     connection: quinn::Connection,
     cancel_recv: watch::Receiver<bool>,
     unreliable_server_receiver: async_channel::Receiver<UnreliableServerMessage>,
+    log_sender: LogSender,
 ) {
-    println!("[client] start sending unreliable messages to server");
+    log(&log_sender, "[server] start sending unreliable messages to clients".into()).await;
     'outgoing_loop: loop {
         // break loop if the cancel receiver is set to true
         if *cancel_recv.borrow() {
-            println!(
-                "[client] cancel receiver is set to true, stopping sending messages to server"
-            );
+            log(&log_sender, "[server] cancel receiver is set to true, stopping sending messages to client".into()).await;
             break;
         }
-        // get message from sync client code
+        // get message from sync server code
         while let Ok(message) = unreliable_server_receiver.recv().await {
             let serialized_message = match serialize_unreliable_server_message(&message) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    println!("[client] failed to serialize message: {}", e);
+                    log(&log_sender, format!("[server] failed to serialize message: {}", e)).await;
                     continue;
                 }
             };
@@ -290,12 +271,12 @@ async fn send_unreliable_server_message(
                 Ok(mut send_stream) => {
                     if let Ok(()) = send_stream.write_all(&serialized_message).await {
                     } else {
-                        println!("[client] failed to send message: {:?}", message);
+                        log(&log_sender, format!("[server] failed to send message: {:?}", message)).await;
                     }
                     let _ = send_stream.finish();
                 }
                 Err(e) => {
-                    println!("[client] failed to open unidirectional stream: {}", e);
+                    log(&log_sender, format!("[server] failed to open unidirectional stream: {}", e)).await;
                     break 'outgoing_loop;
                 }
             }
@@ -307,6 +288,7 @@ async fn send_unreliable_server_message(
 pub async fn run_quinn_server(
     addr: SocketAddr,
     channel_map: ChannelMap,
+    log_sender: LogSender,
 ) -> tokio::task::JoinSet<()> {
     let (endpoint, _server_cert) = make_server_endpoint(addr).unwrap();
 
@@ -320,12 +302,9 @@ pub async fn run_quinn_server(
         while let Some(incoming_conn) = endpoint.accept().await {
             // accept a single connection
             let conn = incoming_conn.await.unwrap();
-            println!(
-                "[server] connection accepted: addr={}",
-                conn.remote_address()
-            );
+            log(&log_sender, format!("[server] connection accepted: addr={}", conn.remote_address())).await;
             let (mut send_stream, mut recv_stream) = conn.open_bi().await.unwrap();
-            println!("[server] opened bidirectional stream");
+            log(&log_sender, "[server] opened bidirectional stream".into()).await;
             // Create a new player ID for this connection
             let player_id = conn.stable_id().to_string();
             let (cancel_sender, cancel_receiver) = watch::channel(false);
@@ -385,6 +364,7 @@ pub async fn run_quinn_server(
                 reliable_server_receiver,
                 client_quit_sender,
                 player_id.clone(),
+                log_sender.clone(),
             ));
 
             let cancel_recv = cancel_receiver.clone();
@@ -393,6 +373,7 @@ pub async fn run_quinn_server(
                 recv_stream,
                 cancel_recv,
                 reliable_client_sender.clone(),
+                log_sender.clone(),
             ));
 
             let cancel_recv = cancel_receiver.clone();
@@ -400,6 +381,7 @@ pub async fn run_quinn_server(
                 conn.clone(),
                 cancel_recv,
                 unreliable_client_sender,
+                log_sender.clone(),
             ));
 
             let cancel_recv = cancel_receiver.clone();
@@ -407,6 +389,7 @@ pub async fn run_quinn_server(
                 conn.clone(),
                 cancel_recv,
                 unreliable_server_receiver,
+                log_sender.clone(),
             ));
         }
     });
@@ -417,4 +400,5 @@ pub async fn run_quinn_server(
 pub struct Server {
     pub channel_map: ChannelMap,
     pub join_set: JoinSet<JoinSet<()>>,
+    pub log_receiver: crate::LogReceiver,
 }

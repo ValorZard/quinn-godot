@@ -227,6 +227,10 @@ impl GameState {
         // This is where you can handle any server-related logic
         // For example, you might want to check for incoming connections or messages
         if let NetworkState::ServerConnection(server) = &mut self.network_state {
+            // Drain log messages from server async tasks
+            while let Ok(log_msg) = server.log_receiver.try_recv() {
+                godot_print!("{}", log_msg);
+            }
             // Handle server logic with the channel_map
             let mut channel_map = server.channel_map.lock().unwrap();
             let mut new_player_vec = Vec::<PlayerId>::new();
