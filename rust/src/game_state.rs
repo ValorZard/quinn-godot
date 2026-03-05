@@ -9,7 +9,10 @@ use game_core::{
 use godot::{classes::ISprite2D, prelude::*};
 use hecs::{Entity, World};
 
-use crate::{async_runtime::AsyncRuntime, player::{self, Player}};
+use crate::{
+    async_runtime::AsyncRuntime,
+    player::{self, Player},
+};
 
 pub enum NetworkState {
     ClientConnection(Client, Gd<Player>),
@@ -46,6 +49,10 @@ impl GameState {
                 self.player_template = Some(template.clone());
                 let mut player_ref = template.instantiate_as::<Player>();
                 player_ref.bind_mut().is_local = true;
+                self.remote_player_map
+                    .insert(server.get_server_id(), player_ref.clone());
+                self.world
+                    .spawn((server.get_server_id(), PlayerPosition { x: 0.0, y: 0.0 }));
                 Some(player_ref)
             } else {
                 None
@@ -106,7 +113,7 @@ impl GameState {
                         self.remote_player_map
                             .insert(client.local_player_id.clone(), player_ref.to_gd());
                     }
-                    ReliableServerMessage::PlayerJoined { player_ids } => {
+                    ReliableServerMessage::PlayersJoined { player_ids } => {
                         let local_player_id = client.local_player_id.clone();
                         for remote_player_id in player_ids {
                             if remote_player_id == local_player_id
@@ -138,7 +145,7 @@ impl GameState {
                         let query_vec = query.into_iter().collect::<Vec<_>>();
                         godot_print!("[client] Current players: {:?}", query_vec);
                     }
-                    ReliableServerMessage::PlayerLeft { player_ids } => {
+                    ReliableServerMessage::PlayersLeft { player_ids } => {
                         for player_id in player_ids {
                             if player_id == client.local_player_id {
                                 continue; // Skip if it's the local player
@@ -263,12 +270,19 @@ impl GameState {
                                     .spawn((player_id.clone(), PlayerPosition { x: 0.0, y: 0.0 }));
                                 new_player_vec.push(player_id.clone());
                                 // send list of players to player who just joined
-                                let player_ids: Vec<PlayerId> = channel_map.keys();
+                                let mut player_ids: Vec<PlayerId> = channel_map.keys();
+                                // Include the host player so clients know about it
+                                if player_ref.is_some() {
+                                    let host_id = server.get_server_id();
+                                    if !player_ids.contains(&host_id) {
+                                        player_ids.push(host_id);
+                                    }
+                                }
                                 if let Some(entry) = channel_map.get(&player_id) {
                                     entry
                                         .reliable_sender
                                         .clone()
-                                        .try_send(ReliableServerMessage::PlayerJoined {
+                                        .try_send(ReliableServerMessage::PlayersJoined {
                                             player_ids,
                                         })
                                         .unwrap();
@@ -276,15 +290,17 @@ impl GameState {
                                 // if we're hosting, also add player to the scene immediately and signal player joined
                                 if let Some(_) = player_ref {
                                     let remote_player_scene = self
-                                        .player_template.as_ref()
+                                        .player_template
+                                        .as_ref()
                                         .expect("Player template should be initialized")
                                         .clone();
-                                    let mut remote_player = remote_player_scene.instantiate_as::<Player>();
-                                    self.remote_player_map.insert(player_id.clone(), remote_player.clone());
+                                    let mut remote_player =
+                                        remote_player_scene.instantiate_as::<Player>();
+                                    self.remote_player_map
+                                        .insert(player_id.clone(), remote_player.clone());
                                     {
                                         let mut remote_player_bind = remote_player.bind_mut();
-                                        remote_player_bind.set_player_id(player_id.clone());   
-
+                                        remote_player_bind.set_player_id(player_id.clone());
                                     }
                                     players_to_signal.push(remote_player);
                                 }
@@ -304,8 +320,10 @@ impl GameState {
                                     self.world.despawn(entity).unwrap();
                                 }
                                 // if we're hosting, also remove player from the scene immediately and signal player left
-                                if let Some(_) = player_ref {   
-                                    if let Some(mut remote_player) = self.remote_player_map.remove(&player_id) {
+                                if let Some(_) = player_ref {
+                                    if let Some(mut remote_player) =
+                                        self.remote_player_map.remove(&player_id)
+                                    {
                                         remote_player.queue_free();
                                     }
                                 }
@@ -342,13 +360,19 @@ impl GameState {
                                         );
                                         */
                                         // if we're hosting, also update position on the scene immediately
-                                        if let Some(_) = player_ref {   
+                                        if let Some(_) = player_ref {
                                             if let Some(remote_player) =
                                                 self.remote_player_map.get_mut(&player_id)
                                             {
-                                                let mut remote_player_bind = remote_player.bind_mut();
+                                                let mut remote_player_bind =
+                                                    remote_player.bind_mut();
                                                 // Set position on the underlying Godot node
-                                                remote_player_bind.base_mut().set_global_position(Vector2::new(player_position.x, player_position.y));
+                                                remote_player_bind.base_mut().set_global_position(
+                                                    Vector2::new(
+                                                        player_position.x,
+                                                        player_position.y,
+                                                    ),
+                                                );
                                             }
                                         }
                                     }
@@ -396,7 +420,7 @@ impl GameState {
                 // Send new player messages
                 if !new_player_vec.is_empty() {
                     // send new player message to all players
-                    let new_player_message = ReliableServerMessage::PlayerJoined {
+                    let new_player_message = ReliableServerMessage::PlayersJoined {
                         player_ids: new_player_vec.clone(),
                     };
                     if let Err(e) = reliable_server_sender.try_send(new_player_message) {
@@ -409,7 +433,7 @@ impl GameState {
                 }
                 // Send leaving player messages
                 if !leaving_player_vec.is_empty() {
-                    let leaving_player_message = ReliableServerMessage::PlayerLeft {
+                    let leaving_player_message = ReliableServerMessage::PlayersLeft {
                         player_ids: leaving_player_vec.clone(),
                     };
                     if let Err(e) = reliable_server_sender.try_send(leaving_player_message) {
@@ -448,6 +472,19 @@ impl GameState {
                 let mut player_ref_bind = player_ref.bind_mut();
                 player_ref_bind.set_player_id(server.get_server_id());
                 player_ref_bind.is_local = true;
+
+                // Update host player's position in the ECS world so it gets broadcast to clients
+                let position = player_ref_bind.base().get_global_position();
+                drop(player_ref_bind);
+                let host_id = server.get_server_id();
+                let query = self.world.query_mut::<(&PlayerId, &mut PlayerPosition)>();
+                for (id, world_position) in query {
+                    if *id == host_id {
+                        world_position.x = position.x;
+                        world_position.y = position.y;
+                    }
+                }
+
                 // signal player joined for host player
                 for player in &players_to_signal {
                     self_gd.signals().player_joined().emit(player);

@@ -33,7 +33,11 @@ impl ChannelMap {
 
     pub fn iter(&self) -> impl Iterator<Item = (PlayerId, MessageChannels)> {
         let guard = self.inner.lock().unwrap();
-        guard.iter().map(|(player_id, channels)| (player_id.clone(), channels.clone())).collect::<Vec<_>>().into_iter()
+        guard
+            .iter()
+            .map(|(player_id, channels)| (player_id.clone(), channels.clone()))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     pub fn get(&self, player_id: &PlayerId) -> Option<MessageChannels> {
@@ -468,15 +472,15 @@ pub async fn run_quinn_server(
                 async_channel::unbounded::<UnreliableClientMessage>();
             // Store the channels in the map
             channel_map.insert(
-                    player_id.clone(),
-                    MessageChannels {
-                        cancel_sender,
-                        reliable_receiver: reliable_client_receiver,
-                        reliable_sender: reliable_server_sender,
-                        unreliable_receiver: unreliable_client_receiver,
-                        unreliable_sender: unreliable_server_sender,
-                    },
-                );
+                player_id.clone(),
+                MessageChannels {
+                    cancel_sender,
+                    reliable_receiver: reliable_client_receiver,
+                    reliable_sender: reliable_server_sender,
+                    unreliable_receiver: unreliable_client_receiver,
+                    unreliable_sender: unreliable_server_sender,
+                },
+            );
 
             // say hello to the client for the client to accept the connection
             let hello_message = ReliableServerMessage::Hello {
