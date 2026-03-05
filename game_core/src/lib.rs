@@ -18,16 +18,21 @@ pub const DEFAULT_PLAYER_ID: PlayerId = String::new();
 pub enum ReliableServerMessage {
     Hello { player_id: PlayerId },
     PlayerJoined { player_ids: Vec<PlayerId> },
-    PlayerPosition(PlayerId, PlayerPosition),
     PlayerLeft { player_ids: Vec<PlayerId> },
     Quit,
 }
 
-/*
+#[derive(Archive, Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[rkyv(
+    // This will generate a PartialEq impl between our unarchived
+    // and archived types
+    compare(PartialEq),
+    // Derives can be passed through to the generated type:
+    derive(Debug),
+)]
 pub enum UnreliableServerMessage {
     PlayerPosition(PlayerId, PlayerPosition),
 }
-*/
 
 #[derive(Archive, Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[rkyv(
@@ -39,15 +44,20 @@ pub enum UnreliableServerMessage {
 )]
 pub enum ReliableClientMessage {
     PlayerJoined { player_id: PlayerId },
-    PlayerPosition(PlayerPosition),
     Quit { player_id: PlayerId },
 }
 
-/*
+#[derive(Archive, Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[rkyv(
+    // This will generate a PartialEq impl between our unarchived
+    // and archived types
+    compare(PartialEq),
+    // Derives can be passed through to the generated type:
+    derive(Debug),
+)]
 pub enum UnreliableClientMessage {
     PlayerPosition(PlayerPosition),
 }
-*/
 
 pub const MAX_PACKET_SIZE: usize = 1024;
 
