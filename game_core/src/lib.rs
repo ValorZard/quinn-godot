@@ -1,4 +1,4 @@
-use quinn::VarInt;
+use iroh::endpoint::VarInt;
 use rkyv::{Archive, Deserialize, Serialize};
 
 pub mod client;
@@ -87,3 +87,6 @@ async fn log(log_sender: &LogSender, msg: String) {
 
 pub type LogSender = async_channel::Sender<String>;
 pub type LogReceiver = async_channel::Receiver<String>;
+
+// An example ALPN that we are using to communicate over the `Endpoint`
+const EXAMPLE_ALPN: &[u8] = b"n0/iroh/examples/0";

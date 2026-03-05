@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::{error::Error, sync::Arc};
 
 use tokio::sync::watch;
@@ -5,98 +6,60 @@ use tokio::sync::watch;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use crate::{
-    LogReceiver, LogSender, MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage,
-    UNIDIRECTIONAL_STREAM_LIMIT, UnreliableClientMessage, UnreliableServerMessage, log,
+    EXAMPLE_ALPN, LogReceiver, LogSender, MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage, UNIDIRECTIONAL_STREAM_LIMIT, UnreliableClientMessage, UnreliableServerMessage, log
 };
-use quinn::crypto::rustls::QuicClientConfig;
-use quinn::{
-    ClientConfig, Connection, Endpoint, VarInt,
-    rustls::{self},
+use iroh::{
+    Endpoint, EndpointAddr, PublicKey, RelayMode, SecretKey, endpoint
 };
+use iroh::endpoint::{Connection, QuicTransportConfig, RecvStream, SendStream, VarInt};
 use rkyv::rancor;
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+
+pub struct Client {
+    pub cancel_sender: watch::Sender<bool>,
+    pub reliable_server_receiver: async_channel::Receiver<ReliableServerMessage>,
+    pub reliable_client_sender: async_channel::Sender<ReliableClientMessage>,
+    pub unreliable_server_receiver: async_channel::Receiver<UnreliableServerMessage>,
+    pub unreliable_client_sender: async_channel::Sender<UnreliableClientMessage>,
+    pub log_receiver: LogReceiver,
+    pub join_set: tokio::task::JoinSet<()>,
+    pub local_player_id: PlayerId,
+    pub endpoint: Endpoint,
+}
 
 async fn connect_to_server(
-    server_addr: SocketAddr,
+    server_iroh_string: String,
 ) -> Result<(Endpoint, Connection), Box<dyn Error + Send + Sync + 'static>> {
-    let mut endpoint = Endpoint::client(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0))?;
-
-    let mut client_config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(
-        rustls::ClientConfig::builder()
-            .dangerous()
-            .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth(),
-    )?));
-    let mut transport = quinn::TransportConfig::default();
-    transport.max_concurrent_uni_streams(UNIDIRECTIONAL_STREAM_LIMIT);
-    client_config.transport_config(Arc::new(transport));
-    endpoint.set_default_client_config(client_config);
+    let mut rng = rand::rng();
+    let secret_key = SecretKey::generate(&mut rng);
+    
+    let transport_config = QuicTransportConfig::builder()
+        .max_concurrent_uni_streams(UNIDIRECTIONAL_STREAM_LIMIT)
+        .build();
+    
+    // Build a `Endpoint`, which uses PublicKeys as endpoint identifiers, uses QUIC for directly connecting to other endpoints, and uses the relay protocol and relay servers to holepunch direct connections between endpoints when there are NATs or firewalls preventing direct connections. If no direct connection can be made, packets are relayed over the relay servers.
+    let endpoint = Endpoint::builder()
+        // The secret key is used to authenticate with other endpoints. The PublicKey portion of this secret key is how we identify endpoints, often referred to as the `endpoint_id` in our codebase.
+        .secret_key(secret_key)
+        // set the ALPN protocols this endpoint will accept on incoming connections
+        .alpns(vec![EXAMPLE_ALPN.to_vec()])
+        // `RelayMode::Default` means that we will use the default relay servers to holepunch and relay.
+        // Use `RelayMode::Custom` to pass in a `RelayMap` with custom relay urls.
+        // Use `RelayMode::Disable` to disable holepunching and relaying over HTTPS
+        // If you want to experiment with relaying using your own relay server, you must pass in the same custom relay url to both the `listen` code AND the `connect` code
+        .relay_mode(RelayMode::Default)
+        .transport_config(transport_config)
+        // you can choose a port to bind to, but passing in `0` will bind the socket to a random available port
+        .bind()
+        .await?;
 
     // connect to server
-    let connection = endpoint
-        .connect(server_addr, "localhost")
-        .unwrap()
-        .await
-        .unwrap();
-    println!("[client] connected: addr={}", connection.remote_address());
+    let server_iroh_id = PublicKey::from_str(&server_iroh_string)
+        .map_err(|e| format!("Failed to parse server Iroh ID: {}", e))?;
+    let server_endpoint_addr = EndpointAddr::from_parts(server_iroh_id, vec![]);
+    let connection = endpoint.connect(server_endpoint_addr, EXAMPLE_ALPN).await?;
+    println!("[client] connected: addr={}", connection.remote_id());
 
     Ok((endpoint, connection))
-}
-
-/// Dummy certificate verifier that treats any certificate as valid.
-/// NOTE, such verification is vulnerable to MITM attacks, but convenient for testing.
-#[derive(Debug)]
-struct SkipServerVerification(Arc<rustls::crypto::CryptoProvider>);
-
-impl SkipServerVerification {
-    fn new() -> Arc<Self> {
-        Arc::new(Self(Arc::new(rustls::crypto::ring::default_provider())))
-    }
-}
-
-impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp: &[u8],
-        _now: UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls12_signature(
-            message,
-            cert,
-            dss,
-            &self.0.signature_verification_algorithms,
-        )
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls13_signature(
-            message,
-            cert,
-            dss,
-            &self.0.signature_verification_algorithms,
-        )
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        self.0.signature_verification_algorithms.supported_schemes()
-    }
 }
 
 pub fn serialize_reliable_client_message(
@@ -136,7 +99,7 @@ pub fn serialize_unreliable_client_message(
 }
 
 async fn read_reliable_server_message(
-    mut recv_stream: quinn::RecvStream,
+    mut recv_stream: RecvStream,
     cancel_rev: watch::Receiver<bool>,
     server_message_sender: async_channel::Sender<ReliableServerMessage>,
     log_sender: LogSender,
@@ -215,7 +178,7 @@ async fn read_reliable_server_message(
 }
 
 async fn send_reliable_client_message(
-    mut send_stream: quinn::SendStream,
+    mut send_stream: SendStream,
     cancel_recv: watch::Receiver<bool>,
     client_message_receiver: async_channel::Receiver<ReliableClientMessage>,
     log_sender: LogSender,
@@ -415,6 +378,7 @@ async fn send_unreliable_client_message(
 }
 
 async fn connect_client_to_server(
+    endpoint: Endpoint,
     connection: Connection,
 ) -> Result<Client, Box<dyn Error + Send + Sync + 'static>> {
     let (cancel_sender, cancel_receiver) = watch::channel(false);
@@ -482,24 +446,13 @@ async fn connect_client_to_server(
         log_receiver,
         join_set,
         local_player_id: PlayerId::default(),
+        endpoint
     })
 }
 
-pub async fn run_client() -> Result<Client, Box<dyn Error + Send + Sync + 'static>> {
+pub async fn run_client(server_iroh_string: String) -> Result<Client, Box<dyn Error + Send + Sync + 'static>> {
     console_subscriber::init();
-    let server_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
-    let (endpoint, connection) = connect_to_server(server_address).await?;
-    let client = connect_client_to_server(connection).await?;
+    let (endpoint, connection) = connect_to_server(server_iroh_string).await?;
+    let client = connect_client_to_server(endpoint, connection).await?;
     Ok(client)
-}
-
-pub struct Client {
-    pub cancel_sender: watch::Sender<bool>,
-    pub reliable_server_receiver: async_channel::Receiver<ReliableServerMessage>,
-    pub reliable_client_sender: async_channel::Sender<ReliableClientMessage>,
-    pub unreliable_server_receiver: async_channel::Receiver<UnreliableServerMessage>,
-    pub unreliable_client_sender: async_channel::Sender<UnreliableClientMessage>,
-    pub log_receiver: LogReceiver,
-    pub join_set: tokio::task::JoinSet<()>,
-    pub local_player_id: PlayerId,
 }

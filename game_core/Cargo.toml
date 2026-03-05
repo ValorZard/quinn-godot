@@ -6,9 +6,9 @@ edition = "2024"
 [dependencies]
 rkyv.workspace = true
 tokio.workspace = true
-quinn.workspace = true
+iroh.workspace = true
+rand.workspace = true
 bytes.workspace = true
 hecs.workspace = true
 async-channel.workspace = true
-rcgen.workspace = true
 console-subscriber.workspace = true

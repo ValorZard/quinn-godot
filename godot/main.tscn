@@ -37,3 +37,9 @@ offset_right = 284.0
 offset_bottom = 85.0
 text = "To run game from Host end:
 Click Server and then click client"
+
+[node name="TextEdit" type="TextEdit" parent="." unique_id=1920041920]
+offset_left = 3.0
+offset_top = 55.0
+offset_right = 271.0
+offset_bottom = 88.0

@@ -24,12 +24,17 @@ func _physics_process(delta: float) -> void:
 func _on_server_button_pressed() -> void:
 	$ServerButton/Label.text = "Is Running"
 	GameState.start_server()
+	$TextEdit.text = GameState.get_server_id()
 
 
 func _on_client_button_button_down() -> void:
 	print("starting client")
-	var client_player := GameState.start_client(player_template)
-	add_child(client_player)
+	var server_iroh_id : String = $TextEdit.text
+	var client_player := GameState.start_client(server_iroh_id, player_template)
+	if client_player != null:
+		add_child(client_player)
+	else:
+		print("failed to start client")
 
 func _exit_tree() -> void:
 	GameState.close_client()

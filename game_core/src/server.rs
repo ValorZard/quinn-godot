@@ -10,54 +10,56 @@ use std::{
 };
 
 use crate::{
-    DELIMITER, LogSender, MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage,
-    UNIDIRECTIONAL_STREAM_LIMIT, UnreliableClientMessage, UnreliableServerMessage, log,
+    DELIMITER, EXAMPLE_ALPN, LogSender, MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage, UNIDIRECTIONAL_STREAM_LIMIT, UnreliableClientMessage, UnreliableServerMessage, log
 };
-use quinn::{
-    Endpoint, ServerConfig, VarInt,
-    rustls::{self, pki_types::PrivatePkcs8KeyDer},
+use iroh::{
+    Endpoint, RelayMode, SecretKey, endpoint,
 };
+use iroh::endpoint::{Connection, RecvStream, SendStream, VarInt, QuicTransportConfig};
 use rkyv::rancor;
-use rustls::pki_types::CertificateDer;
 use tokio::{sync::watch, task::JoinSet};
 
 pub type ChannelMap = Arc<Mutex<HashMap<PlayerId, MessageChannels>>>;
 
-pub fn make_server_endpoint(
-    bind_addr: SocketAddr,
-) -> Result<(Endpoint, CertificateDer<'static>), Box<dyn Error + Send + Sync + 'static>> {
-    let (server_config, server_cert) = configure_server()?;
-    let endpoint = Endpoint::server(server_config, bind_addr)?;
-    Ok((endpoint, server_cert))
+pub struct Server {
+    pub channel_map: ChannelMap,
+    pub join_set: JoinSet<JoinSet<()>>,
+    pub log_receiver: crate::LogReceiver,
+    endpoint: Endpoint,
 }
 
-/// Returns default server configuration along with its certificate.
-fn configure_server()
--> Result<(ServerConfig, CertificateDer<'static>), Box<dyn Error + Send + Sync + 'static>> {
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let cert_der = CertificateDer::from(cert.cert);
-    let priv_key = PrivatePkcs8KeyDer::from(cert.signing_key.serialize_der());
+impl Server {
+    pub fn get_server_id(&self) -> String {
+        self.endpoint.id().to_string()
+    }
+}
 
-    let mut server_config =
-        ServerConfig::with_single_cert(vec![cert_der.clone()], priv_key.into())?;
-    let transport_config = Arc::get_mut(&mut server_config.transport).unwrap();
-    transport_config.max_concurrent_uni_streams(UNIDIRECTIONAL_STREAM_LIMIT);
+pub async fn make_server_endpoint(
+) -> Result<Endpoint, Box<dyn Error + Send + Sync + 'static>> {
+    let secret_key = SecretKey::generate(&mut rand::rng());
+    
+    // Build a `Endpoint` for the server
+    let endpoint = Endpoint::builder()
+        .secret_key(secret_key)
+        .alpns(vec![EXAMPLE_ALPN.to_vec()])
+        .bind().await?;
 
-    Ok((server_config, cert_der))
+    Ok(endpoint)
 }
 
 pub async fn run_server() -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
     //console_subscriber::init();
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
     let channel_map = Arc::new(Mutex::new(HashMap::<PlayerId, MessageChannels>::new()));
     let (log_sender, log_receiver) = async_channel::unbounded::<String>();
     let mut join_set = JoinSet::new();
-    join_set.spawn(run_quinn_server(addr, channel_map.clone(), log_sender));
+    let endpoint = make_server_endpoint().await?;
+    join_set.spawn(run_quinn_server(endpoint.clone(), channel_map.clone(), log_sender));
 
     Ok(Server {
         channel_map,
         join_set,
         log_receiver,
+        endpoint,
     })
 }
 
@@ -107,7 +109,7 @@ pub fn serialize_unreliable_server_message(
 }
 
 pub async fn run_reliable_server_send_stream(
-    mut send_stream: quinn::SendStream,
+    mut send_stream: SendStream,
     cancel_recv: watch::Receiver<bool>,
     reliable_server_receiver: async_channel::Receiver<ReliableServerMessage>,
     reliable_client_sender: async_channel::Sender<ReliableClientMessage>,
@@ -152,7 +154,7 @@ pub async fn run_reliable_server_send_stream(
 }
 
 pub async fn run_reliable_server_recv_stream(
-    mut recv_stream: quinn::RecvStream,
+    mut recv_stream: RecvStream,
     cancel_recv: watch::Receiver<bool>,
     reliable_client_sender: async_channel::Sender<ReliableClientMessage>,
     log_sender: LogSender,
@@ -218,7 +220,7 @@ pub async fn run_reliable_server_recv_stream(
 }
 
 async fn read_unreliable_client_message(
-    connection: quinn::Connection,
+    connection: Connection,
     cancel_recv: watch::Receiver<bool>,
     unreliable_message_sender: async_channel::Sender<UnreliableClientMessage>,
     log_sender: LogSender,
@@ -313,7 +315,7 @@ async fn read_unreliable_client_message(
 }
 
 async fn send_unreliable_server_message(
-    connection: quinn::Connection,
+    connection: Connection,
     cancel_recv: watch::Receiver<bool>,
     unreliable_server_receiver: async_channel::Receiver<UnreliableServerMessage>,
     log_sender: LogSender,
@@ -375,11 +377,15 @@ async fn send_unreliable_server_message(
 
 /// Runs a QUIC server bound to given address.
 pub async fn run_quinn_server(
-    addr: SocketAddr,
+    endpoint: Endpoint,
     channel_map: ChannelMap,
     log_sender: LogSender,
 ) -> tokio::task::JoinSet<()> {
-    let (endpoint, _server_cert) = make_server_endpoint(addr).unwrap();
+    log(
+        &log_sender,
+        format!("[server] server endpoint created, listening on {}", endpoint.id()),
+    )
+    .await;
 
     // add join set to make sure we don't leak any tasks
     let mut join_set = tokio::task::JoinSet::new();
@@ -395,7 +401,7 @@ pub async fn run_quinn_server(
                 &log_sender,
                 format!(
                     "[server] connection accepted: addr={}",
-                    conn.remote_address()
+                    conn.remote_id()
                 ),
             )
             .await;
@@ -491,10 +497,4 @@ pub async fn run_quinn_server(
     });
 
     join_set
-}
-
-pub struct Server {
-    pub channel_map: ChannelMap,
-    pub join_set: JoinSet<JoinSet<()>>,
-    pub log_receiver: crate::LogReceiver,
 }

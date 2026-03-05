@@ -50,9 +50,9 @@ impl GameState {
     }
 
     #[func]
-    pub fn start_client(&mut self, player_template: Gd<PackedScene>) -> Option<Gd<Player>> {
+    pub fn start_client(&mut self, server_iroh_string: GString, player_template: Gd<PackedScene>) -> Option<Gd<Player>> {
         godot_print!("starting client");
-        if let Ok(client) = AsyncRuntime::block_on(run_client()) {
+        if let Ok(client) = AsyncRuntime::block_on(run_client(server_iroh_string.to_string())) {
             godot_print!("client running");
             self.player_template = Some(player_template.clone());
             let player_ref = player_template.instantiate_as::<Player>();
@@ -452,5 +452,15 @@ impl GameState {
             NetworkState::HostConnection(_, _, _) => GString::from("Host"),
             NetworkState::None => GString::from("None"),
         }
+    }
+
+    #[func]
+    pub fn get_server_id(&self) -> GString {
+        let singleton = GameState::singleton();
+        let singleton = singleton.bind();
+        if let NetworkState::ServerConnection(server) = &singleton.network_state {
+            return GString::from(&server.get_server_id());
+        }
+        GString::from("")
     }
 }
