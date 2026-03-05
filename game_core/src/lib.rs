@@ -1,3 +1,4 @@
+use quinn::VarInt;
 use rkyv::{Archive, Deserialize, Serialize};
 
 pub mod client;
@@ -18,16 +19,21 @@ pub const DEFAULT_PLAYER_ID: PlayerId = String::new();
 pub enum ReliableServerMessage {
     Hello { player_id: PlayerId },
     PlayerJoined { player_ids: Vec<PlayerId> },
-    PlayerPosition(PlayerId, PlayerPosition),
     PlayerLeft { player_ids: Vec<PlayerId> },
     Quit,
 }
 
-/*
+#[derive(Archive, Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[rkyv(
+    // This will generate a PartialEq impl between our unarchived
+    // and archived types
+    compare(PartialEq),
+    // Derives can be passed through to the generated type:
+    derive(Debug),
+)]
 pub enum UnreliableServerMessage {
     PlayerPosition(PlayerId, PlayerPosition),
 }
-*/
 
 #[derive(Archive, Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[rkyv(
@@ -39,15 +45,20 @@ pub enum UnreliableServerMessage {
 )]
 pub enum ReliableClientMessage {
     PlayerJoined { player_id: PlayerId },
-    PlayerPosition(PlayerPosition),
     Quit { player_id: PlayerId },
 }
 
-/*
+#[derive(Archive, Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[rkyv(
+    // This will generate a PartialEq impl between our unarchived
+    // and archived types
+    compare(PartialEq),
+    // Derives can be passed through to the generated type:
+    derive(Debug),
+)]
 pub enum UnreliableClientMessage {
     PlayerPosition(PlayerPosition),
 }
-*/
 
 pub const MAX_PACKET_SIZE: usize = 1024;
 
@@ -66,3 +77,6 @@ pub struct PlayerPosition {
 
 pub const DELIMITER: [u8; 1] = *b"D";
 pub type MessageSize = [u8; 4]; // convert a u32 (the size of the message) to bytes
+
+// Be careful with this. Too many concurrent streams and the client will freeze
+pub const UNIDIRECTIONAL_STREAM_LIMIT: VarInt = VarInt::from_u32(128);

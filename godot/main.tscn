@@ -37,6 +37,3 @@ offset_right = 284.0
 offset_bottom = 85.0
 text = "To run game from Host end:
 Click Server and then click client"
-
-[connection signal="button_down" from="ClientButton" to="." method="_on_client_button_button_down"]
-[connection signal="pressed" from="ServerButton" to="." method="_on_server_button_pressed"]
