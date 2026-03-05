@@ -10,8 +10,7 @@ use std::{
 };
 
 use crate::{
-    DELIMITER, MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage,
-    UnreliableClientMessage, UnreliableServerMessage,
+    DELIMITER, MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage, UNIDIRECTIONAL_STREAM_LIMIT, UnreliableClientMessage, UnreliableServerMessage
 };
 use quinn::{
     Endpoint, ServerConfig, VarInt, rustls::{self, pki_types::PrivatePkcs8KeyDer}
@@ -40,7 +39,7 @@ fn configure_server()
     let mut server_config =
         ServerConfig::with_single_cert(vec![cert_der.clone()], priv_key.into())?;
     let transport_config = Arc::get_mut(&mut server_config.transport).unwrap();
-    transport_config.max_concurrent_uni_streams(128_u8.into());
+    transport_config.max_concurrent_uni_streams(UNIDIRECTIONAL_STREAM_LIMIT);
 
     Ok((server_config, cert_der))
 }

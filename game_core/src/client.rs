@@ -5,8 +5,7 @@ use tokio::sync::watch;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use crate::{
-    MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage, UnreliableClientMessage,
-    UnreliableServerMessage,
+    MessageSize, PlayerId, ReliableClientMessage, ReliableServerMessage, UNIDIRECTIONAL_STREAM_LIMIT, UnreliableClientMessage, UnreliableServerMessage
 };
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{
@@ -28,7 +27,7 @@ async fn connect_to_server(
             .with_no_client_auth(),
     )?));
     let mut transport = quinn::TransportConfig::default();
-    transport.max_concurrent_uni_streams(128_u8.into());
+    transport.max_concurrent_uni_streams(UNIDIRECTIONAL_STREAM_LIMIT);
     client_config.transport_config(Arc::new(transport));
     endpoint.set_default_client_config(client_config);
 

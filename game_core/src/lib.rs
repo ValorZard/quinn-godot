@@ -1,3 +1,4 @@
+use quinn::VarInt;
 use rkyv::{Archive, Deserialize, Serialize};
 
 pub mod client;
@@ -76,3 +77,6 @@ pub struct PlayerPosition {
 
 pub const DELIMITER: [u8; 1] = *b"D";
 pub type MessageSize = [u8; 4]; // convert a u32 (the size of the message) to bytes
+
+// Be careful with this. Too many concurrent streams and the client will freeze
+pub const UNIDIRECTIONAL_STREAM_LIMIT: VarInt = VarInt::from_u32(128);
