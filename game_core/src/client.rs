@@ -453,7 +453,7 @@ async fn connect_client_to_server(
 pub async fn run_client(
     server_iroh_string: String,
 ) -> Result<Client, Box<dyn Error + Send + Sync + 'static>> {
-    console_subscriber::init();
+    //console_subscriber::init();
     let (endpoint, connection) = connect_to_server(server_iroh_string).await?;
     let client = connect_client_to_server(endpoint, connection).await?;
     Ok(client)
