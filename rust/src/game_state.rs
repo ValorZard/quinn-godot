@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use game_core::{
     DEFAULT_PLAYER_ID, PlayerId, PlayerPosition, ReliableClientMessage, ReliableServerMessage,
@@ -178,8 +178,7 @@ impl GameState {
             while let Ok(message) = server_reliable_receiver.try_recv() {
                 godot_print!("Received message from server: {:?}", message);
                 match message {
-                    ReliableServerMessage::Hello { player_id } => {
-                    }
+                    ReliableServerMessage::Hello { player_id } => {}
                     ReliableServerMessage::PlayersJoined { player_ids } => {
                         for remote_player_id in player_ids {
                             self.spawn_remote_player(remote_player_id);
@@ -252,7 +251,8 @@ impl GameState {
             let player_ref = player_ref.clone();
             // Handle server logic with the channel_map
             let channel_map = server.channel_map.clone();
-            let mut new_player_vec = Vec::<PlayerId>::new();
+            let mut new_player_set = HashSet::<PlayerId>::new();
+            let mut leaving_player_set = HashSet::<PlayerId>::new();
             for (player_id, channel) in channel_map.iter() {
                 match channel.reliable_receiver.try_recv() {
                     Ok(message) => {
@@ -262,7 +262,7 @@ impl GameState {
                             ReliableClientMessage::PlayerJoined { player_id } => {
                                 godot_print!("Player {} joined", player_id);
                                 self.spawn_remote_player(player_id.clone());
-                                new_player_vec.push(player_id.clone());
+                                new_player_set.insert(player_id.clone());
                                 // send list of players to player who just joined
                                 let mut player_ids: Vec<PlayerId> = channel_map.keys();
                                 // Include the host player so clients know about it
@@ -283,27 +283,7 @@ impl GameState {
                                 }
                             }
                             ReliableClientMessage::Quit { player_id } => {
-                                self.remove_player(&player_id);
-                                let leaving_player_message = ReliableServerMessage::PlayersLeft {
-                                    player_ids: vec![player_id.clone()],
-                                };
-                                if let Some(entry) = channel_map.get(&player_id) {
-                                    if let Err(e) = entry
-                                        .reliable_sender
-                                        .try_send(leaving_player_message.clone())
-                                    {
-                                        godot_print!(
-                                            "Failed to send leaving player message to player {}: {}",
-                                            player_id,
-                                            e
-                                        );
-                                    }
-                                }
-                                // Signal cancellation before removing
-                                if let Some(channels) = channel_map.get(&player_id) {
-                                    let _ = channels.cancel_sender.send(true);
-                                }
-                                channel_map.remove(&player_id);
+                                leaving_player_set.insert(player_id.clone());
                             }
                         }
                     }
@@ -312,6 +292,7 @@ impl GameState {
                     }
                     Err(async_channel::TryRecvError::Closed) => {
                         godot_print!("Channel for player {} closed", player_id);
+                        leaving_player_set.insert(player_id.clone());
                     }
                 }
 
@@ -329,6 +310,7 @@ impl GameState {
                     }
                     Err(async_channel::TryRecvError::Closed) => {
                         godot_print!("Unreliable channel for player {} closed", player_id);
+                        leaving_player_set.insert(player_id.clone());
                     }
                 }
             }
@@ -343,9 +325,9 @@ impl GameState {
                 })
                 .collect::<Vec<UnreliableServerMessage>>();
 
+            // send game data to all players
             for (player_id, message_channels) in channel_map.iter() {
                 // Get player position in the world
-                let reliable_server_sender = &message_channels.reliable_sender;
                 let unreliable_server_sender = &message_channels.unreliable_sender;
                 // send game data to each player
                 for game_data_message in &game_data {
@@ -354,15 +336,51 @@ impl GameState {
                         godot_print!("Failed to send message to player {}: {}", player_id, e);
                     }
                 }
-                // Send new player messages
-                if !new_player_vec.is_empty() {
-                    // send new player message to all players
-                    let new_player_message = ReliableServerMessage::PlayersJoined {
-                        player_ids: new_player_vec.clone(),
-                    };
-                    if let Err(e) = reliable_server_sender.try_send(new_player_message) {
+            }
+
+            // Send new player messages
+            if !new_player_set.is_empty() {
+                // send new player message to all players
+                let new_player_message = ReliableServerMessage::PlayersJoined {
+                    player_ids: new_player_set.iter().cloned().collect::<Vec<PlayerId>>(),
+                };
+                for (player_id, message_channels) in channel_map.iter() {
+                    let reliable_server_sender = &message_channels.reliable_sender;
+                    if let Err(e) = reliable_server_sender.try_send(new_player_message.clone()) {
                         godot_print!(
                             "Failed to send new player message to player {}: {}",
+                            player_id,
+                            e
+                        );
+                    }
+                }
+            }
+
+            // Handle leaving players
+            if !leaving_player_set.is_empty() {
+                for player_id in &leaving_player_set {
+                    self.remove_player(player_id);
+                }
+                let leaving_player_message = ReliableServerMessage::PlayersLeft {
+                    player_ids: leaving_player_set
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<PlayerId>>(),
+                };
+                // shut down channels for leaving players and remove from channel map
+                for player_id in leaving_player_set {
+                    if let Some(message_channels) = channel_map.get(&player_id) {
+                        message_channels.cancel_sender.send(true).unwrap();
+                    }
+                    server.channel_map.remove(&player_id);
+                }
+                // tell remaining players about leaving players
+                for (player_id, message_channels) in channel_map.iter() {
+                    let reliable_server_sender = &message_channels.reliable_sender;
+                    if let Err(e) = reliable_server_sender.try_send(leaving_player_message.clone())
+                    {
+                        godot_print!(
+                            "Failed to send leaving player message to player {}: {}",
                             player_id,
                             e
                         );
@@ -428,8 +446,7 @@ impl GameState {
         let singleton = singleton.bind();
         if let Some(NetworkState::ClientConnection(client, _)) = &singleton.network_state {
             return GString::from(&client.get_local_endpoint_id());
-        }
-        else if let Some(NetworkState::ServerConnection(server, _)) = &singleton.network_state {
+        } else if let Some(NetworkState::ServerConnection(server, _)) = &singleton.network_state {
             return GString::from(&server.get_server_id());
         }
         GString::from(&DEFAULT_PLAYER_ID)
