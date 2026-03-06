@@ -456,8 +456,8 @@ pub async fn run_quinn_server(
             .await;
             let (mut send_stream, mut recv_stream) = conn.open_bi().await.unwrap();
             log(&log_sender, "[server] opened bidirectional stream".into()).await;
-            // Create a new player ID for this connection
-            let player_id = conn.stable_id().to_string();
+            // Get the remote ID for this connection
+            let player_id = conn.remote_id().to_string();
             let (cancel_sender, cancel_receiver) = watch::channel(false);
             // channel to send from server to client
             let (reliable_server_sender, reliable_server_receiver) =
