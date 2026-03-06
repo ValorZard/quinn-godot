@@ -8,13 +8,14 @@ func _ready() -> void:
 	GameState.player_joined.connect(add_remote_player)
 	$ClientButton.button_down.connect(_on_client_button_button_down)
 	$ServerButton.button_down.connect(_on_server_button_pressed)
+	$HostButton.button_down.connect(_on_host_button_pressed)
 
 func add_remote_player(player):
 	add_child(player)
 
 # Called every 1/60th of a second
 func _physics_process(delta: float) -> void:
-	$ClientButton/Label.text = "Amount: " + str(GameState.get_remote_player_amount()) + " Local Player Id: " + GameState.get_local_player_id()
+	$ClientButton/Label.text = "Amount: " + str(GameState.get_remote_player_amount()) + " Local Player Id: " + GameState.get_local_network_id()
 	# both of these won't run if there isn't an active session going
 	# so it's fine to put these here
 	GameState.poll_client()
@@ -23,9 +24,15 @@ func _physics_process(delta: float) -> void:
 
 func _on_server_button_pressed() -> void:
 	$ServerButton/Label.text = "Is Running"
-	GameState.start_server()
-	$TextEdit.text = GameState.get_server_id()
+	GameState.start_server(null)
+	$TextEdit.text = GameState.get_local_network_id()
 
+func _on_host_button_pressed() -> void:
+	$HostButton/Label.text = "Is Running"
+	var host_player = GameState.start_server(player_template)
+	if host_player != null:
+		add_child(host_player)
+	$TextEdit.text = GameState.get_local_network_id()
 
 func _on_client_button_button_down() -> void:
 	print("starting client")

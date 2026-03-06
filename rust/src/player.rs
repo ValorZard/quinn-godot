@@ -25,7 +25,7 @@ impl ISprite2D for Player {
             speed: 400.0,
             angular_speed: std::f64::consts::PI,
             player_id: DEFAULT_PLAYER_ID, // Default player ID, can be set later
-            is_local: true,               // Default to not being local, can be set later
+            is_local: false,              // Default to not being local, can be set later
             base,
         }
     }

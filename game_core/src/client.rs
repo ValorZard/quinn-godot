@@ -22,8 +22,13 @@ pub struct Client {
     pub unreliable_client_sender: async_channel::Sender<UnreliableClientMessage>,
     pub log_receiver: LogReceiver,
     pub join_set: tokio::task::JoinSet<()>,
-    pub local_player_id: PlayerId,
     pub endpoint: Endpoint,
+}
+
+impl Client {
+    pub fn get_local_endpoint_id(&self) -> String {
+        self.endpoint.id().to_string()
+    }
 }
 
 async fn connect_to_server(
@@ -445,7 +450,6 @@ async fn connect_client_to_server(
         unreliable_client_sender,
         log_receiver,
         join_set,
-        local_player_id: PlayerId::default(),
         endpoint,
     })
 }

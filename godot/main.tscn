@@ -32,11 +32,21 @@ layout_mode = 0
 offset_right = 40.0
 offset_bottom = 23.0
 
+[node name="HostButton" type="Button" parent="." unique_id=366383255]
+offset_left = 457.0
+offset_top = 157.0
+offset_right = 618.0
+offset_bottom = 287.0
+text = "Host"
+
+[node name="Label" type="Label" parent="HostButton" unique_id=808301324]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+
 [node name="Label" type="Label" parent="." unique_id=1916515952]
 offset_right = 284.0
 offset_bottom = 85.0
-text = "To run game from Host end:
-Click Server and then click client"
 
 [node name="TextEdit" type="TextEdit" parent="." unique_id=1920041920]
 offset_left = 3.0

@@ -18,8 +18,8 @@ pub const DEFAULT_PLAYER_ID: PlayerId = String::new();
 )]
 pub enum ReliableServerMessage {
     Hello { player_id: PlayerId },
-    PlayerJoined { player_ids: Vec<PlayerId> },
-    PlayerLeft { player_ids: Vec<PlayerId> },
+    PlayersJoined { player_ids: Vec<PlayerId> },
+    PlayersLeft { player_ids: Vec<PlayerId> },
     Quit,
 }
 
