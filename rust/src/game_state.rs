@@ -16,11 +16,6 @@ use crate::{
     player::{self, Player},
 };
 
-pub enum NetworkState {
-    ClientConnection(Client, Gd<Player>),
-    ServerConnection(Server, Option<Gd<Player>>),
-}
-
 #[derive(Debug, Clone)]
 pub struct GodotInputData {
     pub up: bool,
