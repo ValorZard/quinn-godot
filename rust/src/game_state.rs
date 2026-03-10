@@ -76,7 +76,11 @@ impl GameState {
     pub fn player_joined(remote_player: Gd<Player>);
 
     #[func]
-    pub fn start_server(&mut self, player_template: Gd<PackedScene>, is_host: bool) -> Option<Gd<Player>> {
+    pub fn start_server(
+        &mut self,
+        player_template: Gd<PackedScene>,
+        is_host: bool,
+    ) -> Option<Gd<Player>> {
         let entity = AsyncRuntime::block_on(self.inner.start_server(is_host));
         self.player_template = Some(player_template);
         if let Some(player_entity) = entity {

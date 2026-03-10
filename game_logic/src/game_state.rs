@@ -66,12 +66,11 @@ impl GameState {
     pub async fn start_server(&mut self, is_host: bool) -> Option<Entity> {
         if let Ok(server) = run_server().await {
             println!("server running with id {}", server.get_server_id());
-            self.network_state = Some(NetworkState::ServerConnection(
-                server,
-                is_host,
-            ));
+            self.network_state = Some(NetworkState::ServerConnection(server, is_host));
             if is_host {
-                let player_id = self.get_local_network_id().expect("Server ID should be set.");
+                let player_id = self
+                    .get_local_network_id()
+                    .expect("Server ID should be set.");
                 let player_ref = self.spawn_local_player(player_id);
                 return Some(player_ref);
             } else {
@@ -90,8 +89,7 @@ impl GameState {
                 self.log_buffer.push("client running".to_string());
                 let player_id = client.get_local_endpoint_id();
                 let player_ref = self.spawn_local_player(player_id);
-                self.network_state =
-                    Some(NetworkState::ClientConnection(client));
+                self.network_state = Some(NetworkState::ClientConnection(client));
                 Some(player_ref)
             }
             Err(e) => {
@@ -482,7 +480,9 @@ impl GameState {
         if query.is_err() {
             self.log_buffer.push(format!(
                 "[DEBUG] get_local_player_component: entity {:?} query failed for player '{}'",
-                local_player_entity, self.get_local_network_id().unwrap_or("No associated network ID".to_string())
+                local_player_entity,
+                self.get_local_network_id()
+                    .unwrap_or("No associated network ID".to_string())
             ));
             return None;
         }
