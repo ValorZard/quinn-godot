@@ -4,7 +4,7 @@ members = ["game_core", "game_logic", "rust"]
 
 
 [workspace.dependencies]
-godot = {git = "https://github.com/godot-rust/gdext.git", rev = "e780ff2fd69225d6a3313906e6cdfe9111627aeb", features = ["api-4-6", "experimental-threads"]}
+godot = {git = "https://github.com/godot-rust/gdext.git", rev = "869a336fb981f4c676a0ccb6a9422fad95a4138e", features = ["api-4-6", "experimental-threads"]}
 bytes = "1.11.1"
 iroh = "0.96.0"
 rand = "0.9.2"
