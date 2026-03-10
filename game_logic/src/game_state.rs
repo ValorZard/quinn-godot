@@ -241,21 +241,23 @@ impl GameState {
             if let Some(local_player_entity) = self.remote_player_map.get(&local_client_id) {
                 if let Ok(player) = self.world.query_one_mut::<&Player>(*local_player_entity) {
                     let local_player_position = player.position;
-                    if let Err(e) =
-                        client
-                            .unreliable_client_sender
-                            .try_send(UnreliableClientMessage::PlayerPosition(
-                                local_player_position,
-                            ))
-                    {
+                    if let Err(e) = client.unreliable_client_sender.try_send(
+                        UnreliableClientMessage::PlayerPosition(local_player_position),
+                    ) {
                         self.log_buffer
                             .push(format!("Failed to send player position to server: {}", e));
                     }
                 } else {
-                    self.log_buffer.push(format!("[DEBUG] Local player entity {:?} not found in world", local_player_entity));
+                    self.log_buffer.push(format!(
+                        "[DEBUG] Local player entity {:?} not found in world",
+                        local_player_entity
+                    ));
                 }
             } else {
-                self.log_buffer.push(format!("[DEBUG] Local player ID '{}' not in remote_player_map", local_client_id));
+                self.log_buffer.push(format!(
+                    "[DEBUG] Local player ID '{}' not in remote_player_map",
+                    local_client_id
+                ));
             }
         }
 
@@ -469,26 +471,28 @@ impl GameState {
     pub fn get_local_player_component(&mut self) -> Option<Player> {
         let local_player_id = self.get_local_network_id();
         if local_player_id.is_none() {
-            self.log_buffer.push("[DEBUG] get_local_player_component: no local network ID".to_string());
+            self.log_buffer
+                .push("[DEBUG] get_local_player_component: no local network ID".to_string());
             return None;
         }
         let local_player_id = local_player_id.unwrap();
-        
+
         let local_player_entity = self.remote_player_map.get(&local_player_id);
         if local_player_entity.is_none() {
             self.log_buffer.push(format!("[DEBUG] get_local_player_component: player ID '{}' not in remote_player_map (map has {} entries)", local_player_id, self.remote_player_map.len()));
             return None;
         }
         let local_player_entity = *local_player_entity.unwrap();
-        
-        let query = self
-            .world
-            .query_one_mut::<&Player>(local_player_entity);
+
+        let query = self.world.query_one_mut::<&Player>(local_player_entity);
         if query.is_err() {
-            self.log_buffer.push(format!("[DEBUG] get_local_player_component: entity {:?} query failed for player '{}'", local_player_entity, local_player_id));
+            self.log_buffer.push(format!(
+                "[DEBUG] get_local_player_component: entity {:?} query failed for player '{}'",
+                local_player_entity, local_player_id
+            ));
             return None;
         }
-        
+
         Some(query.unwrap().clone())
     }
 
