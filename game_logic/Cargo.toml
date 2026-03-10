@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 hecs.workspace = true
-game_core = { path = "../game_core" }
+game_network = { path = "../game_network" }
 tokio.workspace = true
 async-channel.workspace = true
 clap = {version =  "4.5.60", features = ["derive"]}

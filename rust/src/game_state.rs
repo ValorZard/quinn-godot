@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use game_core::{
+use game_network::{
     DEFAULT_PLAYER_ID, PlayerId, PlayerPosition, ReliableClientMessage, ReliableServerMessage,
     UnreliableClientMessage, UnreliableServerMessage,
     client::{Client, run_client},

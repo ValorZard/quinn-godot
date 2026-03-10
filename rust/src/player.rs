@@ -1,4 +1,4 @@
-use game_core::DEFAULT_PLAYER_ID;
+use game_network::DEFAULT_PLAYER_ID;
 use game_logic::game_state::InputData;
 use godot::classes::{Input, Sprite2D};
 use godot::prelude::*;
@@ -8,7 +8,7 @@ use godot::prelude::*;
 pub struct Player {
     speed: f32,
     angular_speed: f64,
-    pub player_id: game_core::PlayerId,
+    pub player_id: game_network::PlayerId,
     #[export]
     pub is_local: bool,
     pub input: GodotInputData,
@@ -99,7 +99,7 @@ impl ISprite2D for Player {
 #[godot_api]
 impl Player {
     #[func]
-    pub fn set_player_id(&mut self, player_id: game_core::PlayerId) {
+    pub fn set_player_id(&mut self, player_id: game_network::PlayerId) {
         self.player_id = player_id;
     }
 

@@ -8,7 +8,7 @@ license = "MIT"
 godot.workspace = true
 tokio.workspace = true
 async-channel.workspace = true
-game_core = { path = "../game_core" }
+game_network = { path = "../game_network" }
 game_logic = { path = "../game_logic" }
 hecs.workspace = true
 [lib]

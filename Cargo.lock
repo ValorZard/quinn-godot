@@ -1137,7 +1137,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "game_core"
+name = "game_logic"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "clap",
+ "game_network",
+ "hecs",
+ "tokio",
+]
+
+[[package]]
+name = "game_network"
 version = "0.1.0"
 dependencies = [
  "async-channel",
@@ -1147,17 +1158,6 @@ dependencies = [
  "iroh",
  "rand",
  "rkyv",
- "tokio",
-]
-
-[[package]]
-name = "game_logic"
-version = "0.1.0"
-dependencies = [
- "async-channel",
- "clap",
- "game_core",
- "hecs",
  "tokio",
 ]
 
@@ -3205,8 +3205,8 @@ name = "rust"
 version = "1.0.0"
 dependencies = [
  "async-channel",
- "game_core",
  "game_logic",
+ "game_network",
  "godot",
  "hecs",
  "tokio",

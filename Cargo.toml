@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["game_core", "game_logic", "rust"]
+members = ["game_network", "game_logic", "rust"]
 
 
 [workspace.dependencies]
