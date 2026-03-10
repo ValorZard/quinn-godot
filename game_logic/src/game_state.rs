@@ -105,6 +105,8 @@ impl GameState {
                 is_local: true,
             },
         ));
+        self.log_buffer
+            .push(format!("Spawned local player with ID: {}", player_id));
         self.remote_player_map
             .insert(player_id.clone(), player.clone());
         player
@@ -125,6 +127,8 @@ impl GameState {
         ));
         self.remote_player_map
             .insert(player_id.clone(), player.clone());
+        self.log_buffer
+            .push(format!("Spawned remote player with ID: {}", player_id));
         Some(player)
     }
 
@@ -153,9 +157,26 @@ impl GameState {
         }
     }
 
-    pub fn poll(&mut self, position: PlayerPosition) -> PollResult {
+    pub fn submit_local_input(&mut self, position: PlayerPosition) {
+        // Send local player's position to the server
+        // Update local player position in the ECS world
+        let local_id = match self.get_local_network_id() {
+            Some(id) => id,
+            None => return, // No local player ID available
+        };
+        let query = self.world.query_mut::<(&PlayerId, &mut Player)>();
+        for (id, player) in query {
+            if *id == local_id {
+                // TODO: moving diagonally is faster than moving straight, need to normalize movement vector
+                player.position = position;
+                break;
+            }
+        }
+    }
+
+    pub fn poll(&mut self) -> PollResult {
         match &self.network_state {
-            Some(NetworkState::ClientConnection(_, _)) => self.poll_client(position),
+            Some(NetworkState::ClientConnection(_, _)) => self.poll_client(),
             Some(NetworkState::ServerConnection(_, _)) => self.poll_server(),
             None => PollResult {
                 new_players: Vec::new(),
@@ -164,7 +185,7 @@ impl GameState {
         }
     }
 
-    pub fn poll_client(&mut self, position: PlayerPosition) -> PollResult {
+    pub fn poll_client(&mut self) -> PollResult {
         let mut network_state = self.network_state.take();
         let mut new_players = Vec::new();
         let mut leaving_players = Vec::new();
@@ -215,26 +236,26 @@ impl GameState {
                 }
             }
 
-            // Send local player's position to the server
-            {
-                // Update local player position in the ECS world
-                let query = self.world.query_mut::<(&PlayerId, &mut Player)>();
-                for (id, player) in query {
-                    if *id == client.get_local_endpoint_id() {
-                        // TODO: moving diagonally is faster than moving straight, need to normalize movement vector
-                        player.position = position;
-                        // Send position to the server
-                        let message = UnreliableClientMessage::PlayerPosition(PlayerPosition {
-                            x: player.position.x,
-                            y: player.position.y,
-                        });
-                        if let Err(e) = client.unreliable_client_sender.try_send(message) {
-                            self.log_buffer
-                                .push(format!("Failed to send player position: {:?}", e));
-                        }
-                        break;
+            // Send local player position to the server
+            let local_client_id = client.get_local_endpoint_id();
+            if let Some(local_player_entity) = self.remote_player_map.get(&local_client_id) {
+                if let Ok(player) = self.world.query_one_mut::<&Player>(*local_player_entity) {
+                    let local_player_position = player.position;
+                    if let Err(e) =
+                        client
+                            .unreliable_client_sender
+                            .try_send(UnreliableClientMessage::PlayerPosition(
+                                local_player_position,
+                            ))
+                    {
+                        self.log_buffer
+                            .push(format!("Failed to send player position to server: {}", e));
                     }
+                } else {
+                    self.log_buffer.push(format!("[DEBUG] Local player entity {:?} not found in world", local_player_entity));
                 }
+            } else {
+                self.log_buffer.push(format!("[DEBUG] Local player ID '{}' not in remote_player_map", local_client_id));
             }
         }
 
@@ -446,13 +467,29 @@ impl GameState {
     }
 
     pub fn get_local_player_component(&mut self) -> Option<Player> {
-        let local_player_id = self.get_local_network_id()?;
-        let local_player_entity = self.remote_player_map.get(&local_player_id)?;
+        let local_player_id = self.get_local_network_id();
+        if local_player_id.is_none() {
+            self.log_buffer.push("[DEBUG] get_local_player_component: no local network ID".to_string());
+            return None;
+        }
+        let local_player_id = local_player_id.unwrap();
+        
+        let local_player_entity = self.remote_player_map.get(&local_player_id);
+        if local_player_entity.is_none() {
+            self.log_buffer.push(format!("[DEBUG] get_local_player_component: player ID '{}' not in remote_player_map (map has {} entries)", local_player_id, self.remote_player_map.len()));
+            return None;
+        }
+        let local_player_entity = *local_player_entity.unwrap();
+        
         let query = self
             .world
-            .query_one_mut::<&Player>(*local_player_entity)
-            .ok()?;
-        Some(query.clone())
+            .query_one_mut::<&Player>(local_player_entity);
+        if query.is_err() {
+            self.log_buffer.push(format!("[DEBUG] get_local_player_component: entity {:?} query failed for player '{}'", local_player_entity, local_player_id));
+            return None;
+        }
+        
+        Some(query.unwrap().clone())
     }
 
     pub fn get_player_component(&mut self, player_id: &PlayerId) -> Option<Player> {

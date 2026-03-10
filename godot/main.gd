@@ -19,11 +19,7 @@ func _physics_process(delta: float) -> void:
 	$ClientButton/Label.text = "Amount: " + str(GameState.get_remote_player_amount()) + " Local Player Id: " + GameState.get_local_network_id()
 	# both of these won't run if there isn't an active session going
 	# so it's fine to put these here
-	var position := Vector2.ZERO
-	if client_player != null:
-		position = client_player.global_position
-	GameState.poll_client(position)
-	GameState.poll_server()
+	GameState.poll()
 
 
 func _on_server_button_pressed() -> void:

@@ -6,7 +6,7 @@ use game_core::{
     client::{Client, run_client},
     server::{self, Server, run_server},
 };
-use game_logic::game_state::{GameState as GameStateInner, InputData};
+use game_logic::game_state::{DEFAULT_POSITION, GameState as GameStateInner, InputData};
 use godot::{classes::ISprite2D, meta::ByValue, prelude::*};
 use hecs::{Entity, World};
 use tokio::time::error::Error;
@@ -156,28 +156,30 @@ impl GameState {
     }
 
     #[func]
-    pub fn poll_client(&mut self, position: Vector2) {
-        let position = PlayerPosition {
-            x: position.x,
-            y: position.y,
-        };
-        let poll_result = self.inner.poll_client(position);
-        for new_player in poll_result.new_players {
-            self.spawn_remote_player(new_player);
+    pub fn poll(&mut self) {
+        if self.inner.network_state.is_none() {
+            return;
         }
-        for removed_player in poll_result.leaving_players {
-            self.remove_player(&removed_player);
-        }
-        self.sync_player_positions();
-        // print messages
-        for log_msg in self.inner.drain_log_buffer() {
-            godot_print!("{}", log_msg);
-        }
-    }
+        // get local player position to send to the server
+        let local_player_ref = self.player_id_to_godot_map.get(
+            &self
+                .inner
+                .get_local_network_id()
+                .expect("Network state should be set by now"),
+        );
+        let local_player_position = local_player_ref
+            .and_then(|player_node| {
+                let position = player_node.get_global_position();
+                Some(PlayerPosition {
+                    x: position.x,
+                    y: position.y,
+                })
+            })
+            .expect("There should be an initialized local player linked to the network");
 
-    #[func]
-    pub fn poll_server(&mut self) {
-        let poll_result = self.inner.poll_server();
+        self.inner.submit_local_input(local_player_position);
+
+        let poll_result = self.inner.poll();
         for new_player in poll_result.new_players {
             self.spawn_remote_player(new_player);
         }
