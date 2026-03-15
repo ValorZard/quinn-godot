@@ -9,7 +9,6 @@ The networking backend uses [iroh](https://github.com/n0-computer/iroh) for hole
 ## Features
 - Template project to get started with Godot and Rust.
 - Configured to work with Godot Engine and the [Godot Rust bindings](https://github.com/godot-rust/gdext).
-- Provides a simple "Hello, World!" example to demonstrate how to integrate Rust code into Godot.
 - Setup is based on the [Hello World](https://godot-rust.github.io/book/intro/hello-world.html) tutorial from the official Godot-Rust book.
 
 ## Requirements
@@ -41,10 +40,16 @@ If you are working with VS Code, I recommend you to use the `rust-analyzer` exte
 
 ## Project Structure
 
+This project follows a very rough [Model-View-Controller](https://developer.mozilla.org/en-US/docs/Glossary/MVC) pattern, where:
+- the ECS (in this case [hecs](https://github.com/Ralith/hecs) is the Model
+- Godot is the view (gets user input)
+- Rust code (in game_logic and game_network) is the controller.
+
+The actual list of crates/directories is as follows:
 - `rust`: The Rust directory for writing code.
 - `godot`: The Godot project directory, where scenes and assets are located.
 - `game_logic`: This is where a lot of the code related to GameState management is located
-- `game_network`: This crate handles the actual QUIC/Iroh networking code
+- `game_network`: This crate handles the actual QUIC/Iroh networking code (99% of your async code should be here)
 - `README.md`: This file.
 - `LICENSE` The MIT license
 
