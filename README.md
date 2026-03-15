@@ -1,6 +1,10 @@
-# Rust Template for Godot
+# Godot Iroh VectorWar
 
-This is a template project for using Rust in Godot, created based on the official [Godot-Rust](https://godot-rust.github.io/book/intro/hello-world.html) guide. It serves as a starting point for developers who want to integrate Rust into their Godot projects for better performance and type safety.
+This is a template project for a multiplayer game, created based on the official [Godot-Rust](https://godot-rust.github.io/book/intro/hello-world.html) guide. It serves as a starting point for developers who want to integrate Rust into their Godot projects for better performance and type safety.
+
+The game itself is a remake of the classic GGPO Example `VectorWar`. The gameplay consists of two or more spaceships shooting at each other on a 2D plane.
+
+The networking backend uses [iroh](https://github.com/n0-computer/iroh) for holepunching.
 
 ## Features
 - Template project to get started with Godot and Rust.
@@ -9,7 +13,7 @@ This is a template project for using Rust in Godot, created based on the officia
 - Setup is based on the [Hello World](https://godot-rust.github.io/book/intro/hello-world.html) tutorial from the official Godot-Rust book.
 
 ## Requirements
-- **Godot Engine** version 4.4 or later.
+- **Godot Engine** version 4.6 or later.
 - **Rust** installed. You can download it from the official website: https://www.rust-lang.org/
 - **Cargo** – the Rust package manager, which is included when installing Rust.
 
@@ -19,7 +23,7 @@ This is a template project for using Rust in Godot, created based on the officia
 
 2. Make sure you have Godot and Rust set up correctly.
 
-3. Navigate to the `rust-template-godot` project folder and open the `rust-template` project with Godot.
+3. Navigate to the `godot` project folder and open the `project.godot` with Godot.
 
 4. Build the Rust code:
    - In the terminal, go to the project `rust` directory and run:
@@ -28,15 +32,6 @@ This is a template project for using Rust in Godot, created based on the officia
      ```
 
 5. Run the project from Godot.
-
-## Usage
-
-Once everything is set up, you can start adding your own Rust code into the project. The template includes a simple example that prints "Hello, World!" to the Godot console, and adds a `Player` class based on Sprite2D. This can be extended to your game logic.
-
-To modify the Rust code:
-1. Open `src/lib.rs`.
-2. Add your custom functionality or game logic written in Rust.
-3. After making changes, rebuild your project using `cargo build` and test the integration in Godot.
 
 ### Visual Studio Code
 
@@ -47,7 +42,9 @@ If you are working with VS Code, I recommend you to use the `rust-analyzer` exte
 ## Project Structure
 
 - `rust`: The Rust directory for writing code.
-- `rust-template`: The Godot project directory, where scenes and assets are located.
+- `godot`: The Godot project directory, where scenes and assets are located.
+- `game_logic`: This is where a lot of the code related to GameState management is located
+- `game_network`: This crate handles the actual QUIC/Iroh networking code
 - `README.md`: This file.
 - `LICENSE` The MIT license
 
